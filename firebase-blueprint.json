@@ -1,0 +1,153 @@
+{
+  "entities": {
+    "User": {
+      "title": "User",
+      "description": "Employee/user master record with role and group membership.",
+      "type": "object",
+      "properties": {
+        "uid": { "type": "string", "description": "Firebase Auth UID" },
+        "email": { "type": "string", "format": "email" },
+        "displayName": { "type": "string" },
+        "role": { "type": "string", "enum": ["ADMIN", "EXECUTIVE", "MANAGER", "CONTRIBUTOR"] },
+        "groupId": { "type": "string", "description": "ID of the group the user belongs to" },
+        "managerId": { "type": "string", "description": "UID of the user's manager" },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["uid", "email", "role"]
+    },
+    "Group": {
+      "title": "Group",
+      "description": "Department or business-unit structure.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "name": { "type": "string" },
+        "description": { "type": "string" },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["id", "name"]
+    },
+    "Objective": {
+      "title": "Objective",
+      "description": "Main execution objective record.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "objectiveNumber": { "type": "integer" },
+        "title": { "type": "string" },
+        "description": { "type": "string" },
+        "groupId": { "type": "string" },
+        "assignedToId": { "type": "string" },
+        "initiatedById": { "type": "string" },
+        "priority": { "type": "string", "enum": ["CRITICAL", "HIGH", "MEDIUM", "LOW"] },
+        "status": { "type": "string", "enum": ["NOT_STARTED", "IN_PROGRESS", "WAITING_ON_INPUT", "AT_RISK", "BLOCKED", "COMPLETED", "CANCELLED"] },
+        "startDate": { "type": "string", "format": "date-time" },
+        "dueDate": { "type": "string", "format": "date-time" },
+        "completionDate": { "type": "string", "format": "date-time" },
+        "percentComplete": { "type": "number" },
+        "parentId": { "type": "string", "description": "ID of the parent objective if this is a subtask" },
+        "baselineMetric": { "type": "number" },
+        "targetMetric": { "type": "number" },
+        "metricUnit": { "type": "string" },
+        "nextCheckInDate": { "type": "string", "format": "date-time" },
+        "acknowledged": { "type": "boolean" },
+        "blockerNote": { "type": "string" },
+        "nextAction": { "type": "string" },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["id", "title", "groupId", "assignedToId", "initiatedById", "priority", "status", "dueDate"]
+    },
+    "ObjectiveUpdate": {
+      "title": "ObjectiveUpdate",
+      "description": "Progress notes and status updates for an objective.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "objectiveId": { "type": "string" },
+        "userId": { "type": "string" },
+        "note": { "type": "string" },
+        "percentComplete": { "type": "number" },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["id", "objectiveId", "userId", "note"]
+    },
+    "MetricCheckin": {
+      "title": "MetricCheckin",
+      "description": "Time-stamped values for trend tracking.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "objectiveId": { "type": "string" },
+        "value": { "type": "number" },
+        "note": { "type": "string" },
+        "checkinDate": { "type": "string", "format": "date-time" },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["id", "objectiveId", "value"]
+    },
+    "StatusHistory": {
+      "title": "StatusHistory",
+      "description": "Audit trail of objective status and ownership changes.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "objectiveId": { "type": "string" },
+        "previousStatus": { "type": "string" },
+        "newStatus": { "type": "string" },
+        "previousOwner": { "type": "string" },
+        "newOwner": { "type": "string" },
+        "changedBy": { "type": "string" },
+        "changedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["id", "objectiveId", "changedBy", "changedAt"]
+    },
+    "Notification": {
+      "title": "Notification",
+      "description": "Alert or update for a user.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "userId": { "type": "string" },
+        "title": { "type": "string" },
+        "message": { "type": "string" },
+        "type": { "type": "string", "enum": ["OVERDUE", "STATUS_CHANGE", "ASSIGNMENT", "SYSTEM"] },
+        "read": { "type": "boolean" },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "link": { "type": "string" }
+      },
+      "required": ["id", "userId", "title", "message", "type", "read", "createdAt"]
+    }
+  },
+  "firestore": {
+    "/users/{uid}": {
+      "schema": "User",
+      "description": "User profiles"
+    },
+    "/groups/{groupId}": {
+      "schema": "Group",
+      "description": "Departmental groups"
+    },
+    "/objectives/{objectiveId}": {
+      "schema": "Objective",
+      "description": "Main objectives"
+    },
+    "/objectives/{objectiveId}/updates/{updateId}": {
+      "schema": "ObjectiveUpdate",
+      "description": "Objective progress updates"
+    },
+    "/objectives/{objectiveId}/metrics/{metricId}": {
+      "schema": "MetricCheckin",
+      "description": "Objective metric check-ins"
+    },
+    "/objectives/{objectiveId}/history/{historyId}": {
+      "schema": "StatusHistory",
+      "description": "Objective audit trail"
+    },
+    "/notifications/{notificationId}": {
+      "schema": "Notification",
+      "description": "User notifications"
+    }
+  }
+}

@@ -1,0 +1,76 @@
+@import "tailwindcss";
+
+@theme {
+  --font-sans: "Inter", ui-sans-serif, system-ui, sans-serif;
+  --font-mono: "JetBrains Mono", ui-monospace, SFMono-Regular, monospace;
+  
+  /* Papercraft Shadows - More Tactile */
+  --shadow-paper-sm: 2px 2px 0px 0px rgba(0, 0, 0, 0.8);
+  --shadow-paper: 5px 5px 0px 0px rgba(0, 0, 0, 0.8);
+  --shadow-paper-lg: 10px 10px 0px 0px rgba(0, 0, 0, 0.9);
+  --shadow-paper-orange: 4px 4px 0px 0px rgba(247, 148, 29, 0.3);
+}
+
+@layer base {
+  body {
+    @apply bg-[#0B0C10] text-[#8C8CA0] antialiased;
+    background-image: url("https://www.transparenttextures.com/patterns/carbon-fibre.png"); /* Subtle industrial grain */
+    background-attachment: fixed;
+  }
+}
+
+@layer utilities {
+  .paper-card {
+    @apply bg-[#151619] border-2 border-[#555568]/40 transition-all hover:translate-x-[-3px] hover:translate-y-[-3px] active:translate-x-[0px] active:translate-y-[0px];
+    box-shadow: 5px 5px 0px 0px rgba(0, 0, 0, 0.8);
+    position: relative;
+    overflow: hidden;
+  }
+  
+  .paper-card::before {
+    content: "";
+    position: absolute;
+    top: 0; left: 0; right: 0; bottom: 0;
+    background-image: url("https://www.transparenttextures.com/patterns/binding-dark.png");
+    opacity: 0.05;
+    pointer-events: none;
+  }
+
+  .paper-card:hover {
+    box-shadow: 10px 10px 0px 0px rgba(0, 0, 0, 0.9);
+    border-color: #F7941D/30;
+  }
+  
+  .paper-card:active {
+    box-shadow: 2px 2px 0px 0px rgba(0, 0, 0, 0.8);
+  }
+  
+  .paper-button {
+    @apply border-2 border-black/40 font-black uppercase tracking-widest transition-all hover:translate-x-[-2px] hover:translate-y-[-2px] active:translate-x-[1px] active:translate-y-[1px];
+    box-shadow: 4px 4px 0px 0px rgba(0, 0, 0, 0.8);
+  }
+  
+  .paper-button:active {
+    box-shadow: none;
+  }
+  
+  .paper-input {
+    @apply bg-black/30 border-2 border-[#555568]/40 focus:border-[#F7941D]/60 outline-none transition-all;
+    box-shadow: inset 3px 3px 6px rgba(0,0,0,0.5);
+  }
+
+  /* Folded corner effect for cards */
+  .paper-fold {
+    position: relative;
+  }
+  .paper-fold::after {
+    content: "";
+    position: absolute;
+    top: 0; right: 0;
+    width: 0; height: 0;
+    border-style: solid;
+    border-width: 0 15px 15px 0;
+    border-color: transparent #0B0C10 transparent transparent;
+    filter: drop-shadow(-2px 2px 2px rgba(0,0,0,0.5));
+  }
+}
