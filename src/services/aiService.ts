@@ -12,7 +12,7 @@ export interface RiskAnalysis {
 export const analyzeObjectiveRisk = async (objectiveData: any): Promise<RiskAnalysis> => {
   try {
     const response = await ai.models.generateContent({
-      model: "gemini-3-flash-preview",
+      model: "gemini-3.1-pro-preview",
       contents: `Analyze the following objective data and provide a risk assessment. 
       Objective: ${JSON.stringify(objectiveData)}
       
@@ -76,7 +76,7 @@ export interface DailyBriefing {
 export const generateDailyBriefing = async (objectives: any[], userProfile: any): Promise<DailyBriefing> => {
   try {
     const response = await ai.models.generateContent({
-      model: "gemini-3-flash-preview",
+      model: "gemini-3.1-pro-preview",
       contents: `Generate a daily briefing for ${userProfile?.displayName || 'the user'}. 
       Current Objectives: ${JSON.stringify(objectives.map(o => ({ title: o.title, status: o.status, priority: o.priority, dueDate: o.dueDate })))}
       
@@ -122,7 +122,7 @@ export const generateDailyBriefing = async (objectives: any[], userProfile: any)
 export const generatePortfolioSummary = async (objectives: any[], sources: any[] = []): Promise<string> => {
   try {
     const response = await ai.models.generateContent({
-      model: "gemini-3-flash-preview",
+      model: "gemini-3.1-pro-preview",
       contents: `Provide a comprehensive high-level strategic executive summary of the current objective portfolio, augmented by the provided custom knowledge base (sources). 
       
       Portfolio Data: ${JSON.stringify(objectives.map(o => ({ title: o.title, status: o.status, progress: o.progress, priority: o.priority, dueDate: o.dueDate })))}

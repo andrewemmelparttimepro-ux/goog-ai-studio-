@@ -90,17 +90,17 @@ export const ObjectiveForm: React.FC<{ onClose: () => void; initialOwnerId?: str
 
   return (
     <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-[100] p-4">
-      <div className="modern-card w-full max-w-2xl overflow-hidden shadow-2xl flex flex-col max-h-[90vh]">
-        <div className="px-8 py-6 border-b border-white/5 flex items-center justify-between bg-white/[0.02]">
-          <h3 className="text-xl font-black text-white uppercase tracking-tighter">Launch Something New</h3>
+      <div className="modern-card w-full max-w-2xl overflow-hidden shadow-2xl flex flex-col max-h-[90vh] rounded-[2rem] md:rounded-[2.5rem]">
+        <div className="px-6 md:px-8 py-4 md:py-6 border-b border-white/5 flex items-center justify-between bg-white/[0.02]">
+          <h3 className="text-lg md:text-xl font-black text-white uppercase tracking-tighter">Launch Something New</h3>
           <button onClick={onClose} className="p-2 hover:bg-white/5 rounded-lg text-[var(--accents-6)] hover:text-white transition-colors">
-            <X className="w-6 h-6" />
+            <X className="w-5 h-5 md:w-6 md:h-6" />
           </button>
         </div>
 
-        <form onSubmit={handleSubmit} className="p-8 space-y-8 overflow-y-auto custom-scrollbar">
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-            <div className="space-y-6">
+        <form onSubmit={handleSubmit} className="p-6 md:p-8 space-y-6 md:space-y-8 overflow-y-auto custom-scrollbar">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6 md:gap-8">
+            <div className="space-y-4 md:space-y-6">
               <div>
                 <label className="block text-[10px] font-bold text-[var(--accents-6)] uppercase tracking-[0.2em] mb-2">Title</label>
                 <input
@@ -195,7 +195,7 @@ export const ObjectiveForm: React.FC<{ onClose: () => void; initialOwnerId?: str
                 <div className="space-y-3">
                   {metrics.map((m, i) => (
                     <div key={i} className="bg-white/[0.02] p-4 rounded-2xl border border-white/5 space-y-3">
-                      <div className="flex gap-2">
+                      <div className="flex flex-col sm:flex-row gap-2">
                         <input
                           placeholder="Metric Label (e.g. Safety Score)"
                           value={m.label}
@@ -215,10 +215,10 @@ export const ObjectiveForm: React.FC<{ onClose: () => void; initialOwnerId?: str
                             newM[i].target = Number(e.target.value);
                             setMetrics(newM);
                           }}
-                          className="modern-input w-24 text-xs"
+                          className="modern-input w-full sm:w-24 text-xs"
                         />
                       </div>
-                      <div className="flex gap-2">
+                      <div className="flex flex-col sm:flex-row gap-2">
                         <select
                           value={m.externalSource}
                           onChange={(e) => {

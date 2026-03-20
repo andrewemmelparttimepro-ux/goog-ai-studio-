@@ -178,12 +178,12 @@ export const ObjectiveDetails: React.FC<ObjectiveDetailsProps> = ({ objectiveId,
 
   return (
     <div className="fixed inset-0 bg-black/80 backdrop-blur-sm z-[60] flex items-center justify-center p-4">
-      <div className="modern-card w-full max-w-2xl rounded-[2.5rem] shadow-2xl flex flex-col max-h-[90vh] overflow-hidden">
+      <div className="modern-card w-full max-w-2xl rounded-[2rem] md:rounded-[2.5rem] shadow-2xl flex flex-col max-h-[90vh] overflow-hidden">
         {/* Header */}
-        <div className="p-8 border-b border-white/5 flex items-center justify-between bg-white/[0.02]">
-          <div>
-            <div className="flex items-center gap-3 mb-2">
-              <span className={`text-[10px] font-black px-3 py-1 rounded-lg uppercase tracking-[0.2em] border ${
+        <div className="p-6 md:p-8 border-b border-white/5 flex items-start md:items-center justify-between bg-white/[0.02] gap-4">
+          <div className="flex-1 min-w-0">
+            <div className="flex flex-wrap items-center gap-2 md:gap-3 mb-2">
+              <span className={`text-[8px] md:text-[10px] font-black px-2 md:px-3 py-1 rounded-lg uppercase tracking-[0.2em] border ${
                 objective.status === 'COMPLETED' ? 'bg-emerald-500/10 text-emerald-500 border-emerald-500/20' :
                 objective.status === 'AT_RISK' ? 'bg-amber-500/10 text-amber-500 border-amber-500/20' :
                 objective.status === 'BLOCKED' ? 'bg-red-500/10 text-red-500 border-red-500/20' :
@@ -191,39 +191,39 @@ export const ObjectiveDetails: React.FC<ObjectiveDetailsProps> = ({ objectiveId,
               }`}>
                 {objective.status.replace(/_/g, ' ')}
               </span>
-              <span className="text-[10px] text-[var(--accents-6)] font-bold uppercase tracking-[0.2em]">
+              <span className="text-[8px] md:text-[10px] text-[var(--accents-6)] font-bold uppercase tracking-[0.2em]">
                 Priority: {objective.priority}
               </span>
             </div>
-            <h2 className="text-2xl font-black text-white tracking-tighter">{objective.title}</h2>
+            <h2 className="text-xl md:text-2xl font-black text-white tracking-tighter truncate">{objective.title}</h2>
           </div>
-          <button onClick={onClose} className="p-3 hover:bg-white/5 rounded-xl transition-colors text-[var(--accents-6)] hover:text-white">
-            <X className="w-6 h-6" />
+          <button onClick={onClose} className="p-2 md:p-3 hover:bg-white/5 rounded-xl transition-colors text-[var(--accents-6)] hover:text-white shrink-0">
+            <X className="w-5 h-5 md:w-6 md:h-6" />
           </button>
         </div>
 
         {/* Content */}
-        <div className="flex-1 overflow-y-auto p-8 space-y-10">
+        <div className="flex-1 overflow-y-auto p-6 md:p-8 space-y-8 md:space-y-10 custom-scrollbar">
           {/* AI Risk Analysis Section */}
-          <section className="glass-panel p-8 relative overflow-hidden group border-l-4 border-l-[var(--brand-10)]">
-            <div className="absolute top-0 right-0 p-6 opacity-[0.03] group-hover:opacity-[0.07] transition-opacity">
-              <Sparkles className="w-32 h-32 text-[var(--brand-10)]" />
+          <section className="glass-panel p-6 md:p-8 relative overflow-hidden group border-l-4 border-l-[var(--brand-10)]">
+            <div className="absolute top-0 right-0 p-4 md:p-6 opacity-[0.03] group-hover:opacity-[0.07] transition-opacity">
+              <Sparkles className="w-24 h-24 md:w-32 md:h-32 text-[var(--brand-10)]" />
             </div>
             
-            <div className="flex items-center justify-between mb-10">
-              <div className="flex items-center gap-5">
-                <div className="p-4 bg-[var(--brand-10)]/10 rounded-2xl shadow-[0_0_20px_rgba(247,148,29,0.1)]">
-                  <Brain className="w-7 h-7 text-[var(--brand-10)]" />
+            <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-6 md:mb-10 relative z-10">
+              <div className="flex items-center gap-4 md:gap-5">
+                <div className="p-3 md:p-4 bg-[var(--brand-10)]/10 rounded-xl md:rounded-2xl shadow-[0_0_20px_rgba(247,148,29,0.1)] shrink-0">
+                  <Brain className="w-5 h-5 md:w-7 md:h-7 text-[var(--brand-10)]" />
                 </div>
                 <div>
-                  <h3 className="text-sm font-black text-white uppercase tracking-[0.2em]">Strategic Risk Assessment</h3>
-                  <p className="text-[10px] text-[var(--accents-6)] font-bold uppercase tracking-widest mt-1">Intelligence Core: Gemini 3.0 Flash</p>
+                  <h3 className="text-xs md:text-sm font-black text-white uppercase tracking-[0.2em]">Strategic Risk Assessment</h3>
+                  <p className="text-[8px] md:text-[10px] text-[var(--accents-6)] font-bold uppercase tracking-widest mt-1">Intelligence Core: Gemini 3.0 Flash</p>
                 </div>
               </div>
               <button 
                 onClick={runRiskAnalysis}
                 disabled={isAnalyzing}
-                className="secondary-button !text-[10px] !py-2.5 !px-5 flex items-center gap-2.5 disabled:opacity-50 transition-all hover:scale-105 active:scale-95"
+                className="secondary-button !text-[8px] md:!text-[10px] !py-2 md:!py-2.5 !px-4 md:!px-5 flex items-center justify-center gap-2 md:gap-2.5 disabled:opacity-50 transition-all hover:scale-105 active:scale-95 w-full md:w-auto"
               >
                 {isAnalyzing ? <RefreshCw className="w-3.5 h-3.5 animate-spin" /> : <Sparkles className="w-3.5 h-3.5" />}
                 {riskAnalysis ? 'Recalibrate Intelligence' : 'Initialize Analysis'}
@@ -378,11 +378,11 @@ export const ObjectiveDetails: React.FC<ObjectiveDetailsProps> = ({ objectiveId,
                 <button
                   key={btn.id}
                   onClick={() => updateStatus(btn.id)}
-                  className={`flex flex-col items-center gap-3 p-5 rounded-2xl border border-white/5 transition-all text-[10px] font-black uppercase tracking-[0.2em] ${
+                  className={`flex flex-col items-center gap-2 md:gap-3 p-3 md:p-5 rounded-xl md:rounded-2xl border border-white/5 transition-all text-[8px] md:text-[10px] font-black uppercase tracking-[0.2em] text-center ${
                     objective.status === btn.id ? 'bg-white/10 text-white border-white/20 shadow-lg' : 'text-[var(--accents-6)] ' + btn.color
                   }`}
                 >
-                  <btn.icon className="w-5 h-5" />
+                  <btn.icon className="w-4 h-4 md:w-5 md:h-5" />
                   {btn.label}
                 </button>
               ))}

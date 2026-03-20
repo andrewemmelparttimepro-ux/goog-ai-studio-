@@ -84,7 +84,7 @@
 
 @layer utilities {
   .pitch-header {
-    @apply text-3xl md:text-5xl font-extrabold tracking-tighter leading-[1] mb-6 uppercase;
+    @apply text-4xl md:text-6xl lg:text-[5rem] font-extrabold tracking-tighter leading-[0.9] mb-6 uppercase;
     font-family: var(--font-sans);
   }
 

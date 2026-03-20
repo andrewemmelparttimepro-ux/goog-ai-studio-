@@ -181,5 +181,11 @@ service cloud.firestore {
       allow update: if isOwner(resource.data.userId) && hasOnlyAllowedFields(['read']);
       allow create, delete: if isAdmin();
     }
+
+    // Chats
+    match /chats/{chatId}/messages/{messageId} {
+      allow read: if isAuthenticated();
+      allow create: if isAuthenticated() && request.resource.data.senderId == request.auth.uid;
+    }
   }
 }

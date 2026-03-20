@@ -64,6 +64,7 @@ export const Dashboard: React.FC = () => {
   const [isTransitioning, setIsTransitioning] = useState(false);
   const [glitchActive, setGlitchActive] = useState(false);
   const lastScrollTime = useRef(0);
+  const touchStartY = useRef(0);
   const totalSections = 3;
 
   useEffect(() => {
@@ -92,7 +93,7 @@ export const Dashboard: React.FC = () => {
     
     const now = Date.now();
     // Longer cooldown to prevent "slop" and accidental double-flips
-    if (now - lastScrollTime.current < 1000) return;
+    if (now - lastScrollTime.current < 1200) return;
 
     if (Math.abs(e.deltaY) > 40) {
       if (e.deltaY > 0) {
@@ -105,6 +106,30 @@ export const Dashboard: React.FC = () => {
           lastScrollTime.current = now;
           goToSection(sectionIndex - 1);
         }
+      }
+    }
+  };
+
+  const handleTouchStart = (e: React.TouchEvent) => {
+    touchStartY.current = e.touches[0].clientY;
+  };
+
+  const handleTouchEnd = (e: React.TouchEvent) => {
+    if (isTransitioning) return;
+    
+    const touchEndY = e.changedTouches[0].clientY;
+    const delta = touchStartY.current - touchEndY;
+    const now = Date.now();
+    
+    if (now - lastScrollTime.current < 1200) return;
+
+    if (Math.abs(delta) > 50) { // 50px swipe threshold
+      if (delta > 0 && sectionIndex < totalSections - 1) {
+        lastScrollTime.current = now;
+        goToSection(sectionIndex + 1);
+      } else if (delta < 0 && sectionIndex > 0) {
+        lastScrollTime.current = now;
+        goToSection(sectionIndex - 1);
       }
     }
   };
@@ -318,40 +343,39 @@ export const Dashboard: React.FC = () => {
       {/* Main Content */}
       <main 
         onWheel={handleWheel}
+        onTouchStart={handleTouchStart}
+        onTouchEnd={handleTouchEnd}
         className="flex-1 overflow-hidden relative perspective-2000"
       >
-        <AnimatePresence mode="wait" initial={false} custom={direction}>
+        <AnimatePresence initial={false} custom={direction}>
           <motion.div
             key={sectionIndex}
             custom={direction}
             variants={{
               enter: (direction: number) => ({
-                rotateX: direction > 0 ? 90 : -90,
+                y: direction > 0 ? 120 : -120,
                 opacity: 0,
-                z: -800,
-                scale: 0.8,
-                filter: 'blur(10px)'
+                scale: 0.9,
+                filter: 'blur(16px)'
               }),
               center: {
-                rotateX: 0,
+                y: 0,
                 opacity: 1,
-                z: 0,
                 scale: 1,
                 filter: 'blur(0px)',
                 transition: {
                   duration: 1.2,
-                  ease: [0.19, 1, 0.22, 1]
+                  ease: [0.22, 1, 0.36, 1]
                 }
               },
               exit: (direction: number) => ({
-                rotateX: direction > 0 ? -90 : 90,
+                y: direction > 0 ? -120 : 120,
                 opacity: 0,
-                z: -800,
-                scale: 0.8,
-                filter: 'blur(10px)',
+                scale: 0.9,
+                filter: 'blur(16px)',
                 transition: {
-                  duration: 1.0,
-                  ease: [0.19, 1, 0.22, 1]
+                  duration: 1.2,
+                  ease: [0.22, 1, 0.36, 1]
                 }
               })
             }}
@@ -362,9 +386,9 @@ export const Dashboard: React.FC = () => {
             style={{ backfaceVisibility: 'hidden', transformStyle: 'preserve-3d' }}
           >
             {sectionIndex === 0 && (
-              <section className="h-full flex flex-col px-16 md:px-24 py-12 overflow-hidden">
-          <header className="flex-1 flex flex-col justify-center">
-              <div className="flex-1 flex flex-col lg:flex-row items-stretch gap-12">
+              <section className="h-full flex flex-col px-6 md:px-16 lg:px-24 py-6 md:py-12 overflow-y-auto custom-scrollbar">
+          <header className="flex-1 flex flex-col justify-center min-h-min py-8 md:py-0">
+              <div className="flex-1 flex flex-col lg:flex-row items-stretch gap-8 md:gap-12">
                 {/* Left: Strategic Briefing */}
                 <div className="flex-1 flex flex-col justify-center">
                   <motion.p 
@@ -436,7 +460,7 @@ export const Dashboard: React.FC = () => {
                 </div>
 
                 {/* Right: Vertical Action Pillars */}
-                <div className="flex flex-col gap-6 w-full lg:w-[450px]">
+                <div className="flex flex-col gap-4 md:gap-6 w-full lg:w-[450px]">
                   
                   {canCreate && (
                     <motion.button
@@ -445,20 +469,20 @@ export const Dashboard: React.FC = () => {
                       whileHover={{ scale: 1.02, y: -5 }}
                       whileTap={{ scale: 0.98 }}
                       onClick={() => setShowForm(true)}
-                      className="flex-1 group relative flex flex-col items-center justify-center gap-8 bg-gradient-to-br from-[var(--brand-10)]/20 via-[var(--brand-10)]/5 to-transparent border border-[var(--brand-10)]/30 rounded-[4rem] overflow-hidden transition-all duration-500 shadow-[0_40px_100px_rgba(247,148,29,0.15)]"
+                      className="flex-1 min-h-[200px] group relative flex flex-col items-center justify-center gap-4 md:gap-8 bg-gradient-to-br from-[var(--brand-10)]/20 via-[var(--brand-10)]/5 to-transparent border border-[var(--brand-10)]/30 rounded-[2rem] md:rounded-[4rem] overflow-hidden transition-all duration-500 shadow-[0_40px_100px_rgba(247,148,29,0.15)]"
                     >
                       <div className="absolute inset-0 bg-[radial-gradient(circle_at_50%_0%,rgba(247,148,29,0.2),transparent_70%)] opacity-0 group-hover:opacity-100 transition-opacity duration-700" />
                       <div className="relative">
                         <div className="absolute inset-0 bg-[var(--brand-10)] blur-2xl opacity-20 group-hover:opacity-40 transition-opacity" />
-                        <div className="icon-container !bg-[var(--brand-10)] !w-28 !h-28 !shadow-[0_0_80px_rgba(247,148,29,0.5)] group-hover:scale-110 transition-transform duration-700 relative z-10">
-                          <Plus className="w-14 h-14 stroke-[3] text-white drop-shadow-lg" />
+                        <div className="icon-container !bg-[var(--brand-10)] !w-16 !h-16 md:!w-28 md:!h-28 !shadow-[0_0_80px_rgba(247,148,29,0.5)] group-hover:scale-110 transition-transform duration-700 relative z-10">
+                          <Plus className="w-8 h-8 md:w-14 md:h-14 stroke-[3] text-white drop-shadow-lg" />
                         </div>
                       </div>
-                      <div className="text-center px-10 relative z-10">
-                        <span className="text-4xl font-black text-white uppercase tracking-tighter block mb-2 group-hover:tracking-tight transition-all">New Objective</span>
+                      <div className="text-center px-6 md:px-10 relative z-10">
+                        <span className="text-2xl md:text-4xl font-black text-white uppercase tracking-tighter block mb-2 group-hover:tracking-tight transition-all">New Objective</span>
                         <div className="flex items-center justify-center gap-2">
                           <div className="w-1.5 h-1.5 rounded-full bg-[var(--brand-10)] animate-pulse" />
-                          <p className="text-[11px] font-black text-[var(--brand-10)] uppercase tracking-[0.4em] opacity-80">Let's get started</p>
+                          <p className="text-[9px] md:text-[11px] font-black text-[var(--brand-10)] uppercase tracking-[0.4em] opacity-80">Let's get started</p>
                         </div>
                       </div>
                     </motion.button>
@@ -471,20 +495,20 @@ export const Dashboard: React.FC = () => {
                     whileHover={{ scale: 1.02, y: -5 }}
                     whileTap={{ scale: 0.98 }}
                     onClick={scrollToRoadmap}
-                    className="flex-1 group relative flex flex-col items-center justify-center gap-8 bg-gradient-to-br from-indigo-500/20 via-indigo-500/5 to-transparent border border-indigo-500/30 rounded-[4rem] overflow-hidden transition-all duration-500 shadow-[0_40px_100px_rgba(99,102,241,0.15)]"
+                    className="flex-1 min-h-[200px] group relative flex flex-col items-center justify-center gap-4 md:gap-8 bg-gradient-to-br from-indigo-500/20 via-indigo-500/5 to-transparent border border-indigo-500/30 rounded-[2rem] md:rounded-[4rem] overflow-hidden transition-all duration-500 shadow-[0_40px_100px_rgba(99,102,241,0.15)]"
                   >
                     <div className="absolute inset-0 bg-[radial-gradient(circle_at_50%_0%,rgba(99,102,241,0.2),transparent_70%)] opacity-0 group-hover:opacity-100 transition-opacity duration-700" />
                     <div className="relative">
                       <div className="absolute inset-0 bg-indigo-500 blur-2xl opacity-20 group-hover:opacity-40 transition-opacity" />
-                      <div className="icon-container !bg-indigo-500 !w-28 !h-28 !shadow-[0_0_80px_rgba(99,102,241,0.5)] group-hover:scale-110 transition-transform duration-700 relative z-10">
-                        <TrendingUp className="w-14 h-14 stroke-[3] text-white drop-shadow-lg" />
+                      <div className="icon-container !bg-indigo-500 !w-16 !h-16 md:!w-28 md:!h-28 !shadow-[0_0_80px_rgba(99,102,241,0.5)] group-hover:scale-110 transition-transform duration-700 relative z-10">
+                        <TrendingUp className="w-8 h-8 md:w-14 md:h-14 stroke-[3] text-white drop-shadow-lg" />
                       </div>
                     </div>
-                    <div className="text-center px-10 relative z-10">
-                      <span className="text-4xl font-black text-white uppercase tracking-tighter block mb-2 group-hover:tracking-tight transition-all">Current Roadmap</span>
+                    <div className="text-center px-6 md:px-10 relative z-10">
+                      <span className="text-2xl md:text-4xl font-black text-white uppercase tracking-tighter block mb-2 group-hover:tracking-tight transition-all">Current Roadmap</span>
                       <div className="flex items-center justify-center gap-2">
                         <div className="w-1.5 h-1.5 rounded-full bg-indigo-400 animate-pulse" />
-                        <p className="text-[11px] font-black text-indigo-400 uppercase tracking-[0.4em] opacity-80">Where we're headed</p>
+                        <p className="text-[9px] md:text-[11px] font-black text-indigo-400 uppercase tracking-[0.4em] opacity-80">Where we're headed</p>
                       </div>
                     </div>
                   </motion.button>
@@ -503,7 +527,7 @@ export const Dashboard: React.FC = () => {
                 <div className="flex flex-col md:flex-row gap-12 items-start">
                   {/* Spacer to align with the briefing summary line above */}
                   <div className="max-w-2xl w-full hidden md:block" />
-                  <div className="flex flex-col items-center gap-3 -translate-x-1/2">
+                  <div className="hidden md:flex flex-col items-center gap-3 md:-translate-x-1/2 w-full md:w-auto">
                     <span className="text-[9px] font-black uppercase tracking-[0.4em] text-center whitespace-nowrap">Keep going • Scroll to proceed</span>
                     <div className="w-px h-16 bg-gradient-to-b from-[var(--brand-10)] via-[var(--brand-10)]/50 to-transparent shadow-[0_0_10px_rgba(247,148,29,0.2)]" />
                   </div>
@@ -516,44 +540,44 @@ export const Dashboard: React.FC = () => {
             )}
 
             {sectionIndex === 1 && (
-              <section className="h-full flex flex-col px-16 md:px-24 bg-[var(--accents-1)] py-16 overflow-hidden">
+              <section className="h-full flex flex-col px-6 md:px-16 lg:px-24 bg-[var(--accents-1)] py-6 md:py-16 overflow-y-auto custom-scrollbar">
           {/* Top Widgets Grid */}
-          <div className="grid grid-cols-1 xl:grid-cols-4 gap-8 flex-1">
+          <div className="grid grid-cols-1 xl:grid-cols-4 gap-4 md:gap-8 flex-1">
           {/* Sources & AI Insights Widget */}
-          <section className="modern-card p-10 xl:col-span-3 flex flex-col min-h-[500px]">
-            <div className="flex flex-col md:flex-row md:items-center justify-between gap-6 mb-12">
-              <div className="flex items-center gap-6">
-                <div className="w-14 h-14 bg-[var(--brand-10)]/10 rounded-[1.5rem] flex items-center justify-center">
-                  <Brain className="w-8 h-8 text-[var(--brand-10)]" />
+          <section className="modern-card p-6 md:p-10 xl:col-span-3 flex flex-col min-h-[500px]">
+            <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 md:gap-6 mb-6 md:mb-12">
+              <div className="flex items-center gap-4 md:gap-6">
+                <div className="w-10 h-10 md:w-14 md:h-14 bg-[var(--brand-10)]/10 rounded-xl md:rounded-[1.5rem] flex items-center justify-center shrink-0">
+                  <Brain className="w-5 h-5 md:w-8 md:h-8 text-[var(--brand-10)]" />
                 </div>
                 <div>
-                  <h3 className="text-xl font-black text-white tracking-tighter">The Knowledge Base</h3>
-                  <p className="text-xs text-[var(--accents-6)] font-bold uppercase tracking-widest mt-1">Making sense of the chaos</p>
+                  <h3 className="text-lg md:text-xl font-black text-white tracking-tighter">The Knowledge Base</h3>
+                  <p className="text-[10px] md:text-xs text-[var(--accents-6)] font-bold uppercase tracking-widest mt-1">Making sense of the chaos</p>
                 </div>
               </div>
-              <div className="flex items-center gap-4">
+              <div className="flex flex-wrap items-center gap-2 md:gap-4">
                 <button 
                   onClick={() => setShowSourceInput(!showSourceInput)}
-                  className="secondary-button flex items-center gap-3"
+                  className="secondary-button flex items-center gap-2 md:gap-3 !px-3 md:!px-6 !py-2 md:!py-3 !text-[10px] md:!text-xs"
                 >
-                  <Plus className="w-4 h-4" />
+                  <Plus className="w-3 h-3 md:w-4 md:h-4" />
                   <span>Add Source</span>
                 </button>
                 <button 
                   onClick={runPortfolioSummary}
                   disabled={isSummarizing || (objectives.length === 0 && sources.length === 0)}
-                  className="accent-button flex items-center gap-3 disabled:opacity-50"
+                  className="accent-button flex items-center gap-2 md:gap-3 disabled:opacity-50 !px-3 md:!px-6 !py-2 md:!py-3 !text-[10px] md:!text-xs"
                 >
-                  {isSummarizing ? <RefreshCw className="w-4 h-4 animate-spin" /> : <Zap className="w-4 h-4" />}
+                  {isSummarizing ? <RefreshCw className="w-3 h-3 md:w-4 md:h-4 animate-spin" /> : <Zap className="w-3 h-3 md:w-4 md:h-4" />}
                   <span>{portfolioSummary ? 'Re-Analyze' : 'Generate Insights'}</span>
                 </button>
               </div>
             </div>
 
-            <div className="grid grid-cols-1 lg:grid-cols-5 gap-12 flex-1">
+            <div className="grid grid-cols-1 lg:grid-cols-5 gap-8 md:gap-12 flex-1">
               {/* Sources List */}
               <div className="lg:col-span-2 flex flex-col">
-                <div className="text-[10px] font-black text-[var(--accents-6)] uppercase tracking-[0.3em] mb-6">What we know ({sources.length})</div>
+                <div className="text-[10px] font-black text-[var(--accents-6)] uppercase tracking-[0.3em] mb-4 md:mb-6">What we know ({sources.length})</div>
                 
                 <AnimatePresence>
                   {showSourceInput && (
@@ -633,25 +657,25 @@ export const Dashboard: React.FC = () => {
           </section>
 
           {/* KPI Summary Widget */}
-          <section className="modern-card p-10 flex flex-col">
-            <div className="flex items-center justify-between mb-12">
-              <h3 className="text-sm font-black text-white uppercase tracking-[0.2em]">How we're doing</h3>
+          <section className="modern-card p-6 md:p-10 flex flex-col">
+            <div className="flex items-center justify-between mb-6 md:mb-12">
+              <h3 className="text-xs md:text-sm font-black text-white uppercase tracking-[0.2em]">How we're doing</h3>
               <div className="w-2 h-2 rounded-full bg-[var(--success-9)] animate-pulse" />
             </div>
             
-            <div className="grid grid-cols-1 gap-6 flex-1">
+            <div className="grid grid-cols-1 gap-4 md:gap-6 flex-1">
               {[
                 { label: "Active", value: kpis.open, color: "text-[var(--brand-10)]", bg: "bg-[var(--brand-10)]/5" },
                 { label: "Overdue", value: kpis.overdue, color: "text-[var(--error-9)]", bg: "bg-[var(--error-9)]/5" },
                 { label: "Due Soon", value: kpis.dueSoon, color: "text-[var(--warning-9)]", bg: "bg-[var(--warning-9)]/5" },
                 { label: "Completed", value: kpis.completed, color: "text-[var(--success-9)]", bg: "bg-[var(--success-9)]/5" }
               ].map((kpi, i) => (
-                <div key={i} className={`${kpi.bg} border border-white/5 rounded-3xl p-6 flex items-center justify-between group hover:border-white/10 transition-all`}>
+                <div key={i} className={`${kpi.bg} border border-white/5 rounded-2xl md:rounded-3xl p-4 md:p-6 flex items-center justify-between group hover:border-white/10 transition-all`}>
                   <div>
-                    <div className="text-[10px] font-black tracking-[0.2em] text-[var(--accents-6)] uppercase mb-1">{kpi.label}</div>
-                    <div className={`text-4xl font-black ${kpi.color} tracking-tighter`}>{kpi.value}</div>
+                    <div className="text-[8px] md:text-[10px] font-black tracking-[0.2em] text-[var(--accents-6)] uppercase mb-1">{kpi.label}</div>
+                    <div className={`text-3xl md:text-4xl font-black ${kpi.color} tracking-tighter`}>{kpi.value}</div>
                   </div>
-                  <ChevronRight className="w-5 h-5 text-[var(--accents-4)] group-hover:text-white transition-all" />
+                  <ChevronRight className="w-4 h-4 md:w-5 md:h-5 text-[var(--accents-4)] group-hover:text-white transition-all" />
                 </div>
               ))}
             </div>
@@ -661,7 +685,7 @@ export const Dashboard: React.FC = () => {
             )}
 
             {sectionIndex === 2 && (
-              <section className="h-full flex flex-col px-16 md:px-24 bg-[var(--accents-1)] py-16 overflow-hidden">
+              <section className="h-full flex flex-col bg-[var(--accents-1)] overflow-hidden">
                 <Roadmap />
               </section>
             )}
