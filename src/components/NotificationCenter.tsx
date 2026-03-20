@@ -47,10 +47,10 @@ export const NotificationCenter: React.FC = () => {
 
   const getTypeIcon = (type: string) => {
     switch (type) {
-      case 'OVERDUE': return <AlertTriangle className="w-4 h-4 text-red-500" />;
+      case 'OVERDUE': return <AlertTriangle className="w-4 h-4 text-[var(--error-8)]" />;
       case 'STATUS_CHANGE': return <Info className="w-4 h-4 text-blue-500" />;
-      case 'ASSIGNMENT': return <Bell className="w-4 h-4 text-[#F7941D]" />;
-      default: return <Bell className="w-4 h-4 text-[#555568]" />;
+      case 'ASSIGNMENT': return <Bell className="w-4 h-4 text-[var(--brand-10)]" />;
+      default: return <Bell className="w-4 h-4 text-[var(--accents-6)]" />;
     }
   };
 
@@ -58,11 +58,11 @@ export const NotificationCenter: React.FC = () => {
     <div className="relative">
       <button 
         onClick={() => setIsOpen(!isOpen)}
-        className="paper-button p-2 bg-white/5 hover:bg-white/10 rounded-xl relative"
+        className="secondary-button p-2 relative"
       >
-        <Bell className="w-5 h-5 text-[#8C8CA0]" />
+        <Bell className="w-5 h-5 text-[var(--accents-7)]" />
         {unreadCount > 0 && (
-          <span className="absolute -top-1 -right-1 w-4 h-4 bg-[#F7941D] text-white text-[10px] font-black flex items-center justify-center rounded-full border-2 border-[#0B0C10]">
+          <span className="absolute -top-1 -right-1 w-4 h-4 bg-[var(--brand-10)] text-white text-[10px] font-black flex items-center justify-center rounded-full border-2 border-[var(--accents-1)]">
             {unreadCount}
           </span>
         )}
@@ -71,17 +71,17 @@ export const NotificationCenter: React.FC = () => {
       {isOpen && (
         <>
           <div className="fixed inset-0 z-[80]" onClick={() => setIsOpen(false)} />
-          <div className="absolute right-0 mt-3 w-80 paper-card z-[90] overflow-hidden">
+          <div className="absolute right-0 mt-3 w-80 modern-card z-[90] overflow-hidden">
             <div className="p-4 border-b border-white/5 flex items-center justify-between bg-white/[0.02]">
               <h4 className="text-[10px] font-black text-white uppercase tracking-widest">Notifications</h4>
-              <span className="text-[10px] text-[#555568] font-bold">{unreadCount} Unread</span>
+              <span className="text-[10px] text-[var(--accents-6)] font-bold">{unreadCount} Unread</span>
             </div>
             
-            <div className="max-h-96 overflow-y-auto">
+            <div className="max-h-96 overflow-y-auto custom-scrollbar">
               {notifications.length === 0 ? (
                 <div className="p-8 text-center">
-                  <Bell className="w-8 h-8 text-[#555568] mx-auto mb-2 opacity-20" />
-                  <p className="text-xs text-[#555568] font-bold uppercase tracking-tighter">Clear Skies</p>
+                  <Bell className="w-8 h-8 text-[var(--accents-6)] mx-auto mb-2 opacity-20" />
+                  <p className="text-xs text-[var(--accents-6)] font-bold uppercase tracking-tighter">All quiet on the front</p>
                 </div>
               ) : (
                 notifications.map((n) => (
@@ -97,21 +97,21 @@ export const NotificationCenter: React.FC = () => {
                           {!n.read && (
                             <button 
                               onClick={() => markAsRead(n.id)}
-                              className="text-[#F7941D] hover:text-white transition-colors"
+                              className="text-[var(--brand-10)] hover:text-white transition-colors"
                             >
                               <Check className="w-3 h-3" />
                             </button>
                           )}
                         </div>
-                        <p className="text-[11px] text-[#8C8CA0] leading-relaxed mb-2">{n.message}</p>
+                        <p className="text-[11px] text-[var(--accents-7)] leading-relaxed mb-2">{n.message}</p>
                         <div className="flex items-center justify-between">
-                          <span className="text-[9px] text-[#555568] font-mono">
+                          <span className="text-[9px] text-[var(--accents-6)] font-mono">
                             {n.createdAt?.toDate().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
                           </span>
                           {n.link && (
                             <a 
                               href={n.link} 
-                              className="text-[9px] font-bold text-[#F7941D] uppercase hover:underline flex items-center gap-1"
+                              className="text-[9px] font-bold text-[var(--brand-10)] uppercase hover:underline flex items-center gap-1"
                             >
                               View <ExternalLink className="w-2 h-2" />
                             </a>
@@ -131,9 +131,9 @@ export const NotificationCenter: React.FC = () => {
                   fetch('/api/system/check-overdue', { method: 'POST' });
                   setIsOpen(false);
                 }}
-                className="text-[9px] font-black text-[#555568] hover:text-white uppercase tracking-widest transition-colors"
+                className="text-[9px] font-black text-[var(--accents-6)] hover:text-white uppercase tracking-widest transition-colors"
               >
-                Force System Check
+                Poke the system
               </button>
             </div>
           </div>

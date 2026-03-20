@@ -8,8 +8,8 @@ const AppContent = () => {
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-[#0B0C10] flex items-center justify-center">
-        <div className="w-8 h-8 border-2 border-[#F7941D]/30 border-t-[#F7941D] rounded-full animate-spin" />
+      <div className="min-h-screen bg-[var(--accents-1)] flex items-center justify-center">
+        <div className="w-8 h-8 border-2 border-[var(--brand-10)]/30 border-t-[var(--brand-10)] rounded-full animate-spin" />
       </div>
     );
   }

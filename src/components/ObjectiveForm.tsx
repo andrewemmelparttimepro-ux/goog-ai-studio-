@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
-import { collection, addDoc, serverTimestamp, getDocs, query, where, doc, setDoc } from 'firebase/firestore';
+import { X, Plus } from 'lucide-react';
 import { db, handleFirestoreError, OperationType } from '../firebase';
+import { getDocs, collection, doc, setDoc, serverTimestamp } from 'firebase/firestore';
 import { useAuth } from './FirebaseProvider';
 
 interface Group {
@@ -13,7 +14,7 @@ interface User {
   displayName: string;
 }
 
-export const ObjectiveForm: React.FC<{ onClose: () => void }> = ({ onClose }) => {
+export const ObjectiveForm: React.FC<{ onClose: () => void; initialOwnerId?: string }> = ({ onClose, initialOwnerId }) => {
   const { user } = useAuth();
   const [groups, setGroups] = useState<Group[]>([]);
   const [users, setUsers] = useState<User[]>([]);
@@ -22,7 +23,7 @@ export const ObjectiveForm: React.FC<{ onClose: () => void }> = ({ onClose }) =>
     title: '',
     description: '',
     groupId: '',
-    assignedToId: '',
+    assignedToId: initialOwnerId || '',
     priority: 'MEDIUM',
     dueDate: '',
   });
@@ -89,50 +90,48 @@ export const ObjectiveForm: React.FC<{ onClose: () => void }> = ({ onClose }) =>
 
   return (
     <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-[100] p-4">
-      <div className="paper-card w-full max-w-2xl overflow-hidden shadow-2xl flex flex-col max-h-[90vh]">
-        <div className="px-6 py-4 border-b border-white/5 flex items-center justify-between bg-white/[0.02]">
-          <h3 className="text-lg font-black text-white uppercase tracking-tighter">Initiate Objective</h3>
-          <button onClick={onClose} className="text-[#555568] hover:text-white transition-colors">
-            <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-            </svg>
+      <div className="modern-card w-full max-w-2xl overflow-hidden shadow-2xl flex flex-col max-h-[90vh]">
+        <div className="px-8 py-6 border-b border-white/5 flex items-center justify-between bg-white/[0.02]">
+          <h3 className="text-xl font-black text-white uppercase tracking-tighter">Launch Something New</h3>
+          <button onClick={onClose} className="p-2 hover:bg-white/5 rounded-lg text-[var(--accents-6)] hover:text-white transition-colors">
+            <X className="w-6 h-6" />
           </button>
         </div>
 
-        <form onSubmit={handleSubmit} className="p-6 space-y-6 overflow-y-auto">
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            <div className="space-y-4">
+        <form onSubmit={handleSubmit} className="p-8 space-y-8 overflow-y-auto custom-scrollbar">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+            <div className="space-y-6">
               <div>
-                <label className="block text-[10px] font-bold text-[#555568] uppercase tracking-widest mb-1.5">Title</label>
+                <label className="block text-[10px] font-bold text-[var(--accents-6)] uppercase tracking-[0.2em] mb-2">Title</label>
                 <input
                   required
                   type="text"
                   value={formData.title}
                   onChange={e => setFormData({ ...formData, title: e.target.value })}
-                  className="paper-input w-full px-4 py-3 text-sm text-white rounded-xl"
+                  className="modern-input w-full"
                   placeholder="e.g. Reduce equipment downtime 15%"
                 />
               </div>
 
               <div>
-                <label className="block text-[10px] font-bold text-[#555568] uppercase tracking-widest mb-1.5">Description</label>
+                <label className="block text-[10px] font-bold text-[var(--accents-6)] uppercase tracking-[0.2em] mb-2">Description</label>
                 <textarea
                   required
                   value={formData.description}
                   onChange={e => setFormData({ ...formData, description: e.target.value })}
-                  className="paper-input w-full px-4 py-3 text-sm text-white rounded-xl min-h-[100px]"
+                  className="modern-input w-full min-h-[120px] resize-none"
                   placeholder="Detailed statement of the expected outcome..."
                 />
               </div>
 
               <div className="grid grid-cols-2 gap-4">
                 <div>
-                  <label className="block text-[10px] font-bold text-[#555568] uppercase tracking-widest mb-1.5">Priority</label>
+                  <label className="block text-[10px] font-bold text-[var(--accents-6)] uppercase tracking-[0.2em] mb-2">Priority</label>
                   <select
                     required
                     value={formData.priority}
                     onChange={e => setFormData({ ...formData, priority: e.target.value })}
-                    className="paper-input w-full px-4 py-3 text-sm text-white rounded-xl appearance-none"
+                    className="modern-input w-full appearance-none"
                   >
                     <option value="LOW">Low</option>
                     <option value="MEDIUM">Medium</option>
@@ -141,39 +140,39 @@ export const ObjectiveForm: React.FC<{ onClose: () => void }> = ({ onClose }) =>
                   </select>
                 </div>
                 <div>
-                  <label className="block text-[10px] font-bold text-[#555568] uppercase tracking-widest mb-1.5">Due Date</label>
+                  <label className="block text-[10px] font-bold text-[var(--accents-6)] uppercase tracking-[0.2em] mb-2">Due Date</label>
                   <input
                     required
                     type="date"
                     value={formData.dueDate}
                     onChange={e => setFormData({ ...formData, dueDate: e.target.value })}
-                    className="paper-input w-full px-4 py-3 text-sm text-white rounded-xl"
+                    className="modern-input w-full"
                   />
                 </div>
               </div>
             </div>
 
-            <div className="space-y-4">
+            <div className="space-y-6">
               <div className="grid grid-cols-2 gap-4">
                 <div>
-                  <label className="block text-[10px] font-bold text-[#555568] uppercase tracking-widest mb-1.5">Group</label>
+                  <label className="block text-[10px] font-bold text-[var(--accents-6)] uppercase tracking-[0.2em] mb-2">Group</label>
                   <select
                     required
                     value={formData.groupId}
                     onChange={e => setFormData({ ...formData, groupId: e.target.value })}
-                    className="paper-input w-full px-4 py-3 text-sm text-white rounded-xl appearance-none"
+                    className="modern-input w-full appearance-none"
                   >
                     <option value="" disabled>Select Group</option>
                     {groups.map(g => <option key={g.id} value={g.id}>{g.name}</option>)}
                   </select>
                 </div>
                 <div>
-                  <label className="block text-[10px] font-bold text-[#555568] uppercase tracking-widest mb-1.5">Assign To</label>
+                  <label className="block text-[10px] font-bold text-[var(--accents-6)] uppercase tracking-[0.2em] mb-2">Assign To</label>
                   <select
                     required
                     value={formData.assignedToId}
                     onChange={e => setFormData({ ...formData, assignedToId: e.target.value })}
-                    className="paper-input w-full px-4 py-3 text-sm text-white rounded-xl appearance-none"
+                    className="modern-input w-full appearance-none"
                   >
                     <option value="" disabled>Select Owner</option>
                     {users.map(u => <option key={u.uid} value={u.uid}>{u.displayName}</option>)}
@@ -183,19 +182,19 @@ export const ObjectiveForm: React.FC<{ onClose: () => void }> = ({ onClose }) =>
 
               {/* Metrics Input */}
               <div>
-                <div className="flex justify-between items-center mb-1.5">
-                  <label className="text-[10px] font-bold text-[#555568] uppercase tracking-widest">Metrics & Data Connectors</label>
+                <div className="flex justify-between items-center mb-2">
+                  <label className="text-[10px] font-bold text-[var(--accents-6)] uppercase tracking-[0.2em]">How we'll know we won</label>
                   <button 
                     type="button" 
                     onClick={() => setMetrics([...metrics, { label: '', baseline: 0, target: 100, unit: '%', externalSource: 'MANUAL', integrationId: '' }])}
-                    className="text-[10px] text-[#F7941D] font-bold uppercase hover:underline"
+                    className="text-[10px] text-[var(--brand-10)] font-black uppercase hover:underline tracking-widest"
                   >
                     + Add Metric
                   </button>
                 </div>
                 <div className="space-y-3">
                   {metrics.map((m, i) => (
-                    <div key={i} className="bg-white/[0.02] p-3 rounded-xl border border-white/5 space-y-2">
+                    <div key={i} className="bg-white/[0.02] p-4 rounded-2xl border border-white/5 space-y-3">
                       <div className="flex gap-2">
                         <input
                           placeholder="Metric Label (e.g. Safety Score)"
@@ -205,7 +204,7 @@ export const ObjectiveForm: React.FC<{ onClose: () => void }> = ({ onClose }) =>
                             newM[i].label = e.target.value;
                             setMetrics(newM);
                           }}
-                          className="paper-input flex-1 px-3 py-2 text-xs text-white rounded-lg"
+                          className="modern-input flex-1 text-xs"
                         />
                         <input
                           placeholder="Target"
@@ -216,7 +215,7 @@ export const ObjectiveForm: React.FC<{ onClose: () => void }> = ({ onClose }) =>
                             newM[i].target = Number(e.target.value);
                             setMetrics(newM);
                           }}
-                          className="paper-input w-20 px-3 py-2 text-xs text-white rounded-lg"
+                          className="modern-input w-24 text-xs"
                         />
                       </div>
                       <div className="flex gap-2">
@@ -227,7 +226,7 @@ export const ObjectiveForm: React.FC<{ onClose: () => void }> = ({ onClose }) =>
                             newM[i].externalSource = e.target.value as any;
                             setMetrics(newM);
                           }}
-                          className="paper-input flex-1 px-3 py-2 text-[10px] text-white rounded-lg appearance-none"
+                          className="modern-input flex-1 text-[10px] appearance-none"
                         >
                           <option value="MANUAL">Manual Entry</option>
                           <option value="KPH_EHS">KPH EHS Connector</option>
@@ -242,7 +241,7 @@ export const ObjectiveForm: React.FC<{ onClose: () => void }> = ({ onClose }) =>
                               newM[i].integrationId = e.target.value;
                               setMetrics(newM);
                             }}
-                            className="paper-input flex-1 px-3 py-2 text-xs text-white rounded-lg"
+                            className="modern-input flex-1 text-xs"
                           />
                         )}
                       </div>
@@ -253,12 +252,12 @@ export const ObjectiveForm: React.FC<{ onClose: () => void }> = ({ onClose }) =>
 
               {/* Subtasks Input */}
               <div>
-                <div className="flex justify-between items-center mb-1.5">
-                  <label className="text-[10px] font-bold text-[#555568] uppercase tracking-widest">Execution Steps</label>
+                <div className="flex justify-between items-center mb-2">
+                  <label className="text-[10px] font-bold text-[var(--accents-6)] uppercase tracking-[0.2em]">The Plan</label>
                   <button 
                     type="button" 
                     onClick={() => setSubtasks([...subtasks, { title: '' }])}
-                    className="text-[10px] text-[#F7941D] font-bold uppercase hover:underline"
+                    className="text-[10px] text-[var(--brand-10)] font-black uppercase hover:underline tracking-widest"
                   >
                     + Add Step
                   </button>
@@ -274,7 +273,7 @@ export const ObjectiveForm: React.FC<{ onClose: () => void }> = ({ onClose }) =>
                         newS[i].title = e.target.value;
                         setSubtasks(newS);
                       }}
-                      className="paper-input w-full px-3 py-2 text-xs text-white rounded-lg"
+                      className="modern-input w-full text-xs"
                     />
                   ))}
                 </div>
@@ -282,20 +281,20 @@ export const ObjectiveForm: React.FC<{ onClose: () => void }> = ({ onClose }) =>
             </div>
           </div>
 
-          <div className="pt-6 flex gap-3 border-t border-white/5">
+          <div className="pt-8 flex gap-4 border-t border-white/5">
             <button
               type="button"
               onClick={onClose}
-              className="flex-1 py-3 text-[#555568] hover:text-white font-bold uppercase tracking-widest text-xs transition-colors"
+              className="secondary-button flex-1 text-xs uppercase tracking-widest"
             >
               Cancel
             </button>
             <button
               type="submit"
               disabled={loading}
-              className="paper-button flex-1 py-3 bg-[#F7941D] hover:bg-[#E8850A] disabled:bg-[#F7941D]/50 text-white font-bold rounded-xl uppercase tracking-widest text-xs"
+              className="accent-button flex-1 text-xs uppercase tracking-widest"
             >
-              {loading ? "Initiating..." : "Initiate Objective"}
+              {loading ? "Launching..." : "Let's get started"}
             </button>
           </div>
         </form>

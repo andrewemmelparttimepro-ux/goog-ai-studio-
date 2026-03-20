@@ -1,13 +1,14 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { useAuth } from './FirebaseProvider';
 import { auth, db } from '../firebase';
 import { signOut } from 'firebase/auth';
 import { collection, onSnapshot, query, where, orderBy, Timestamp, getDocs, updateDoc, doc } from 'firebase/firestore';
 import { ObjectiveForm } from './ObjectiveForm';
 import { ObjectiveDetails } from './ObjectiveDetails';
+import { Roadmap } from './Roadmap';
 import { NotificationCenter } from './NotificationCenter';
 import { fetchExternalMetric } from '../services/externalDataService';
-import { RefreshCw, Search, Filter, Plus } from 'lucide-react';
+import { Brain, TrendingUp, History, ChevronRight, LayoutDashboard, Zap, Menu, X, RefreshCw, Plus, Search } from 'lucide-react';
 
 interface Metric {
   label: string;
@@ -28,6 +29,7 @@ interface Subtask {
 interface Objective {
   id: string;
   title: string;
+  description: string;
   assignedToId: string;
   status: string;
   priority: string;
@@ -37,74 +39,78 @@ interface Objective {
   subtasks?: Subtask[];
 }
 
-import { generatePortfolioSummary } from '../services/aiService';
-import { Sparkles, Brain, TrendingUp, History, ChevronRight, LayoutDashboard, Zap } from 'lucide-react';
+import { generatePortfolioSummary, generateDailyBriefing, DailyBriefing } from '../services/aiService';
+import { motion, AnimatePresence } from 'framer-motion';
 
 export const Dashboard: React.FC = () => {
-  const { user, profile, signOut } = useAuth();
+  const { user, profile } = useAuth();
   const [objectives, setObjectives] = useState<Objective[]>([]);
   const [showForm, setShowForm] = useState(false);
   const [selectedObjectiveId, setSelectedObjectiveId] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
-  const [isSyncing, setIsSyncing] = useState(false);
-  const [syncStatus, setSyncStatus] = useState<string | null>(null);
   const [portfolioSummary, setPortfolioSummary] = useState<string | null>(null);
   const [isSummarizing, setIsSummarizing] = useState(false);
+  const [dailyBriefing, setDailyBriefing] = useState<DailyBriefing | null>(null);
+  const [isBriefingLoading, setIsBriefingLoading] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
-  const [filterStatus, setFilterStatus] = useState('ALL');
+  const [sources, setSources] = useState<{ id: string; name: string; type: string; content: string }[]>([]);
+  const [newSourceText, setNewSourceText] = useState('');
+  const [showSourceInput, setShowSourceInput] = useState(false);
+  const [isSidebarOpen, setIsSidebarOpen] = useState(false);
+  
+  // Section Management
+  const [sectionIndex, setSectionIndex] = useState(0);
+  const [direction, setDirection] = useState(0);
+  const [isTransitioning, setIsTransitioning] = useState(false);
+  const [glitchActive, setGlitchActive] = useState(false);
+  const lastScrollTime = useRef(0);
+  const totalSections = 3;
 
-  const filteredObjectives = useMemo(() => {
-    return objectives.filter(obj => {
-      const matchesSearch = obj.title.toLowerCase().includes(searchTerm.toLowerCase()) || 
-                           obj.description.toLowerCase().includes(searchTerm.toLowerCase());
-      const matchesStatus = filterStatus === 'ALL' || obj.status === filterStatus;
-      return matchesSearch && matchesStatus;
-    });
-  }, [objectives, searchTerm, filterStatus]);
+  useEffect(() => {
+    if (isTransitioning) {
+      setGlitchActive(true);
+      const timer = setTimeout(() => setGlitchActive(false), 500);
+      return () => clearTimeout(timer);
+    }
+  }, [sectionIndex, isTransitioning]);
 
-  const syncAllMetrics = async () => {
-    setIsSyncing(true);
-    setSyncStatus("Syncing external data...");
-    let syncCount = 0;
+  const goToSection = (index: number) => {
+    if (index < 0 || index >= totalSections || index === sectionIndex || isTransitioning) return;
+    
+    setDirection(index > sectionIndex ? 1 : -1);
+    setIsTransitioning(true);
+    setSectionIndex(index);
+    
+    // Reset transition state after animation
+    setTimeout(() => {
+      setIsTransitioning(false);
+    }, 1200);
+  };
 
-    try {
-      for (const obj of objectives) {
-        if (!obj.metrics || obj.metrics.length === 0) continue;
-        
-        let updatedMetrics = [...obj.metrics];
-        let hasChanges = false;
+  const handleWheel = (e: React.WheelEvent) => {
+    if (isTransitioning) return;
+    
+    const now = Date.now();
+    // Longer cooldown to prevent "slop" and accidental double-flips
+    if (now - lastScrollTime.current < 1000) return;
 
-        for (let i = 0; i < updatedMetrics.length; i++) {
-          const metric = updatedMetrics[i];
-          if (metric.externalSource && metric.externalSource !== 'MANUAL' && metric.integrationId) {
-            try {
-              const externalData = await fetchExternalMetric(metric.externalSource, metric.integrationId);
-              if (externalData.value !== metric.current) {
-                updatedMetrics[i] = { ...metric, current: externalData.value };
-                hasChanges = true;
-                syncCount++;
-              }
-            } catch (e) {
-              console.warn(`Failed to sync metric ${metric.label} for objective ${obj.id}`, e);
-            }
-          }
+    if (Math.abs(e.deltaY) > 40) {
+      if (e.deltaY > 0) {
+        if (sectionIndex < totalSections - 1) {
+          lastScrollTime.current = now;
+          goToSection(sectionIndex + 1);
         }
-
-        if (hasChanges) {
-          await updateDoc(doc(db, 'objectives', obj.id), {
-            metrics: updatedMetrics,
-            updatedAt: Timestamp.now()
-          });
+      } else {
+        if (sectionIndex > 0) {
+          lastScrollTime.current = now;
+          goToSection(sectionIndex - 1);
         }
       }
-      setSyncStatus(`Successfully synced ${syncCount} metrics.`);
-      setTimeout(() => setSyncStatus(null), 3000);
-    } catch (error) {
-      console.error("Error syncing all metrics:", error);
-      setSyncStatus("Sync failed. Check console.");
-    } finally {
-      setIsSyncing(false);
     }
+  };
+
+  const scrollToRoadmap = () => {
+    goToSection(2);
   };
 
   useEffect(() => {
@@ -116,6 +122,11 @@ export const Dashboard: React.FC = () => {
       const data = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Objective));
       setObjectives(data);
       setLoading(false);
+      
+      // Fetch daily briefing once objectives are loaded
+      if (data.length > 0 && !dailyBriefing && !isBriefingLoading) {
+        fetchBriefing(data);
+      }
     }, (error) => {
       console.error("Objectives fetch error:", error);
       setLoading(false);
@@ -124,17 +135,46 @@ export const Dashboard: React.FC = () => {
     return () => unsubscribe();
   }, [user]);
 
+  const fetchBriefing = async (currentObjectives: Objective[]) => {
+    setIsBriefingLoading(true);
+    try {
+      const briefing = await generateDailyBriefing(currentObjectives, profile);
+      setDailyBriefing(briefing);
+    } catch (error) {
+      console.error("Briefing fetch error:", error);
+    } finally {
+      setIsBriefingLoading(false);
+    }
+  };
+
   const runPortfolioSummary = async () => {
-    if (objectives.length === 0) return;
+    if (objectives.length === 0 && sources.length === 0) return;
     setIsSummarizing(true);
     try {
-      const summary = await generatePortfolioSummary(objectives);
+      const summary = await generatePortfolioSummary(objectives, sources);
       setPortfolioSummary(summary);
     } catch (error) {
       console.error("Portfolio summary failed:", error);
     } finally {
       setIsSummarizing(false);
     }
+  };
+
+  const addSource = () => {
+    if (!newSourceText.trim()) return;
+    const newSource = {
+      id: Math.random().toString(36).substr(2, 9),
+      name: newSourceText.length > 20 ? newSourceText.substring(0, 20) + '...' : newSourceText,
+      type: 'TEXT',
+      content: newSourceText
+    };
+    setSources([...sources, newSource]);
+    setNewSourceText('');
+    setShowSourceInput(false);
+  };
+
+  const removeSource = (id: string) => {
+    setSources(sources.filter(s => s.id !== id));
   };
 
   const kpis = {
@@ -155,277 +195,506 @@ export const Dashboard: React.FC = () => {
   const canCreate = profile?.role === 'ADMIN' || profile?.role === 'MANAGER';
 
   return (
-    <div className="min-h-screen bg-[#0B0C10] text-[#E8E8F0] flex flex-col">
-      {/* Header */}
-      <header className="h-16 border-b border-white/5 bg-[#151619]/50 backdrop-blur-md px-6 flex items-center justify-between sticky top-0 z-50">
-        <div className="flex items-center gap-4">
-          <div className="text-xl font-black tracking-tighter">
-            <span className="text-[#F7941D]">Sand</span>
-            <span className="text-[#555568]">Pro</span>
-          </div>
-          <div className="w-px h-5 bg-white/10" />
-          <div className="text-[10px] font-bold tracking-[0.2em] text-[#F7941D] uppercase">
-            SP OMP
-          </div>
-        </div>
+    <div className="flex min-h-screen bg-[var(--accents-1)] text-[var(--accents-8)] font-sans selection:bg-[var(--brand-10)]/30 overflow-hidden relative">
+      {/* Sidebar Toggle Tab (Vertical) */}
+      {!isSidebarOpen && (
+        <motion.button 
+          initial={{ x: -20 }}
+          animate={{ x: 0 }}
+          whileHover={{ x: 5 }}
+          onClick={() => setIsSidebarOpen(true)}
+          className="fixed left-0 top-1/2 -translate-y-1/2 z-[60] bg-[var(--brand-10)] text-white py-8 px-2 rounded-r-2xl shadow-2xl flex flex-col items-center gap-4 group transition-all"
+          aria-label="Open Sidebar"
+        >
+          <Menu className="w-5 h-5" />
+          <span className="[writing-mode:vertical-lr] text-[10px] font-black uppercase tracking-[0.2em] rotate-180">Navigation</span>
+        </motion.button>
+      )}
 
-          <div className="flex items-center gap-4">
-            <div className="text-right hidden sm:block">
-              <div className="text-xs font-bold text-white">{profile?.displayName || user?.displayName}</div>
-              <div className="text-[10px] text-[#555568] font-mono uppercase tracking-widest">{profile?.role || 'CONTRIBUTOR'}</div>
-            </div>
-            <NotificationCenter />
-            <button
-              onClick={() => signOut(auth)}
-            className="p-2 hover:bg-white/5 rounded-lg transition-colors text-[#555568] hover:text-white"
-            title="Sign Out"
-          >
-            <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
-            </svg>
-          </button>
-        </div>
-      </header>
+      {/* Sidebar */}
+      <AnimatePresence>
+        {isSidebarOpen && (
+          <>
+            <motion.div 
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              onClick={() => setIsSidebarOpen(false)}
+              className="fixed inset-0 bg-black/60 backdrop-blur-sm z-[45]"
+            />
+            <motion.aside 
+              initial={{ x: -320 }}
+              animate={{ x: 0 }}
+              exit={{ x: -320 }}
+              transition={{ type: 'spring', damping: 30, stiffness: 300 }}
+              className="w-80 bg-[var(--accents-2)] border-r border-white/5 flex flex-col fixed top-0 left-0 h-screen z-50 shadow-2xl"
+            >
+              <div className="p-10 flex flex-col h-full">
+                <div className="flex items-center justify-between mb-12">
+                  <div className="flex items-center gap-4">
+                    <div className="w-12 h-12 bg-[var(--brand-10)] rounded-2xl flex items-center justify-center shadow-lg shadow-[var(--brand-10)]/20">
+                      <LayoutDashboard className="w-7 h-7 text-white" />
+                    </div>
+                    <div className="text-2xl font-black tracking-tighter">
+                      <span className="text-white">Sand</span>
+                      <span className="text-[var(--accents-6)]">Pro</span>
+                    </div>
+                  </div>
+                  <button 
+                    onClick={() => setIsSidebarOpen(false)}
+                    className="p-2 hover:bg-white/5 rounded-xl text-[var(--accents-6)] hover:text-white transition-all"
+                  >
+                    <X className="w-6 h-6" />
+                  </button>
+                </div>
+
+                <div className="relative mb-10">
+                  <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-[var(--accents-6)]" />
+                  <input 
+                    type="text" 
+                    placeholder="Quick search..."
+                    value={searchTerm}
+                    onChange={(e) => setSearchTerm(e.target.value)}
+                    className="w-full bg-white/[0.03] border border-white/5 rounded-2xl pl-12 pr-4 py-3.5 text-sm text-white focus:outline-none focus:border-[var(--brand-10)]/30 transition-all"
+                  />
+                </div>
+
+                <nav className="space-y-2 flex-1">
+                  <div className="text-[10px] font-black text-[var(--accents-6)] uppercase tracking-[0.3em] mb-6 px-6">Workspace</div>
+                  <button 
+                    onClick={() => goToSection(0)}
+                    className={`sidebar-item w-full ${sectionIndex === 0 ? 'sidebar-item-active' : ''}`}
+                  >
+                    <LayoutDashboard className="w-5 h-5" />
+                    <span>The Bridge</span>
+                  </button>
+                  <button 
+                    onClick={() => goToSection(1)}
+                    className={`sidebar-item w-full ${sectionIndex === 1 ? 'sidebar-item-active' : ''}`}
+                  >
+                    <Brain className="w-5 h-5" />
+                    <span>The Brain</span>
+                  </button>
+                  <button 
+                    onClick={() => goToSection(2)}
+                    className={`sidebar-item w-full ${sectionIndex === 2 ? 'sidebar-item-active' : ''}`}
+                  >
+                    <TrendingUp className="w-5 h-5" />
+                    <span>The Game Plan</span>
+                  </button>
+                  <button className="sidebar-item w-full opacity-40 cursor-not-allowed">
+                    <Zap className="w-5 h-5" />
+                    <span>Automations</span>
+                  </button>
+                </nav>
+
+                <div className="mt-auto pt-8 border-t border-white/5">
+                  <div className="flex items-center gap-4 p-4 bg-white/[0.02] rounded-3xl border border-white/5">
+                    <div className="w-12 h-12 rounded-2xl bg-[var(--brand-10)]/20 flex items-center justify-center border border-[var(--brand-10)]/30 overflow-hidden">
+                      {user?.photoURL ? (
+                        <img src={user.photoURL} alt="Profile" className="w-full h-full object-cover" />
+                      ) : (
+                        <span className="text-[var(--brand-10)] font-black text-lg">{user?.displayName?.[0] || 'U'}</span>
+                      )}
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <div className="text-sm font-black text-white truncate">{profile?.displayName || user?.displayName}</div>
+                      <div className="text-[10px] text-[var(--accents-6)] font-mono uppercase tracking-widest truncate">{profile?.role || 'CONTRIBUTOR'}</div>
+                    </div>
+                    <button
+                      onClick={() => signOut(auth)}
+                      className="p-2 hover:bg-[var(--error-5)]/10 rounded-xl transition-colors text-[var(--accents-6)] hover:text-[var(--error-9)]"
+                    >
+                      <X className="w-5 h-5" />
+                    </button>
+                  </div>
+                </div>
+              </div>
+            </motion.aside>
+          </>
+        )}
+      </AnimatePresence>
 
       {/* Main Content */}
-      <main className="flex-1 p-6 md:p-10 max-w-7xl mx-auto w-full">
-        <div className="flex flex-col md:flex-row md:items-center justify-between gap-6 mb-10">
-          <div>
-            <h2 className="text-3xl font-black text-white tracking-tighter mb-2">Platform Dashboard</h2>
-            <p className="text-[#8C8CA0] text-sm">Real-time execution tracking for SandPro objectives.</p>
-          </div>
-          <div className="flex items-center gap-3">
-            {syncStatus && (
-              <div className="flex items-center gap-2 px-4 py-2 bg-[#F7941D]/10 border border-[#F7941D]/20 rounded-xl animate-pulse">
-                <RefreshCw className={`w-3 h-3 text-[#F7941D] ${isSyncing ? 'animate-spin' : ''}`} />
-                <span className="text-[10px] font-bold text-[#F7941D] uppercase tracking-widest">{syncStatus}</span>
-              </div>
-            )}
-            <button 
-              onClick={syncAllMetrics}
-              disabled={isSyncing}
-              className="px-6 py-3 bg-[#151619] border border-white/10 hover:bg-white/5 text-[#8C8CA0] hover:text-white font-bold rounded-xl transition-all flex items-center gap-2 text-sm disabled:opacity-50"
-            >
-              <RefreshCw className={`w-4 h-4 ${isSyncing ? 'animate-spin' : ''}`} />
-              Sync All
-            </button>
-            <a 
-              href="/api/reporting/objectives" 
-              target="_blank" 
-              rel="noopener noreferrer"
-              className="px-6 py-3 bg-[#151619] border border-white/10 hover:bg-white/5 text-white font-bold rounded-xl transition-all flex items-center gap-2 text-sm"
-            >
-              <svg className="w-5 h-5 text-[#F7941D]" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
-              </svg>
-              Reporting API
-            </a>
-            {canCreate && (
-              <button
-                onClick={() => setShowForm(true)}
-                className="px-6 py-3 bg-[#F7941D] hover:bg-[#E8850A] text-white font-bold rounded-xl transition-all shadow-lg shadow-[#F7941D]/20 flex items-center gap-2"
-              >
-                <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
-                </svg>
-                New Objective
-              </button>
-            )}
-          </div>
-        </div>
-
-        {/* AI Portfolio Insight */}
-        <section className="bg-white/[0.02] border border-white/5 rounded-2xl p-6 relative overflow-hidden group">
-          <div className="absolute top-0 right-0 p-4 opacity-10 group-hover:opacity-20 transition-opacity">
-            <Sparkles className="w-16 h-12 text-[#F7941D]" />
-          </div>
-          
-          <div className="flex flex-col md:flex-row md:items-center justify-between gap-6">
-            <div className="flex items-center gap-4">
-              <div className="p-3 bg-[#F7941D]/10 rounded-xl">
-                <Brain className="w-6 h-6 text-[#F7941D]" />
-              </div>
-              <div>
-                <h3 className="text-sm font-black text-white uppercase tracking-widest">Portfolio Strategic Insights</h3>
-                <p className="text-[10px] text-[#555568] font-bold uppercase tracking-tighter">AI-Generated Executive Summary</p>
-              </div>
-            </div>
-            <button 
-              onClick={runPortfolioSummary}
-              disabled={isSummarizing || objectives.length === 0}
-              className="paper-button px-6 py-3 bg-[#F7941D]/10 hover:bg-[#F7941D]/20 text-[#F7941D] text-xs font-black uppercase tracking-widest rounded-xl flex items-center gap-2 disabled:opacity-50"
-            >
-              {isSummarizing ? <RefreshCw className="w-4 h-4 animate-spin" /> : <Sparkles className="w-4 h-4" />}
-              {portfolioSummary ? 'Refresh Insights' : 'Generate Strategic Summary'}
-            </button>
-          </div>
-
-          {portfolioSummary && (
-            <div className="mt-6 p-6 bg-white/[0.01] border border-white/5 rounded-xl animate-in fade-in slide-in-from-top-4 duration-700">
-              <p className="text-sm text-[#8C8CA0] leading-relaxed italic border-l-4 border-[#F7941D]/30 pl-6">
-                "{portfolioSummary}"
-              </p>
-              <div className="mt-4 flex items-center gap-2 text-[10px] text-[#555568] font-bold uppercase tracking-widest">
-                <Zap className="w-3 h-3 text-[#F7941D]" />
-                Actionable Intelligence for Leadership
-              </div>
-            </div>
-          )}
-        </section>
-
-        {/* KPI Strip */}
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-6 mb-10">
-          {[
-            { label: "Open Objectives", value: kpis.open, color: "text-[#F7941D]" },
-            { label: "Overdue", value: kpis.overdue, color: "text-red-500" },
-            { label: "Due in 7 Days", value: kpis.dueSoon, color: "text-amber-500" },
-            { label: "Completed", value: kpis.completed, color: "text-emerald-500" }
-          ].map((kpi, i) => (
-            <div key={i} className="paper-card p-6 text-center">
-              <div className={`text-3xl font-black font-mono mb-1 ${kpi.color}`}>{kpi.value}</div>
-              <div className="text-[10px] font-bold tracking-widest text-[#555568] uppercase">{kpi.label}</div>
-            </div>
-          ))}
-        </div>
-
-        {/* Objectives List */}
-        <div className="paper-card overflow-hidden">
-          <div className="px-6 py-4 border-b border-white/5 bg-white/[0.02] flex flex-col md:flex-row md:items-center justify-between gap-4">
-            <h3 className="text-sm font-bold text-white uppercase tracking-widest">Execution Grid</h3>
-            
-            <div className="flex items-center gap-4">
-              <div className="relative">
-                <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-[#555568]" />
-                <input 
-                  type="text" 
-                  placeholder="Search objectives..."
-                  value={searchTerm}
-                  onChange={(e) => setSearchTerm(e.target.value)}
-                  className="bg-white/[0.03] border border-white/10 rounded-xl pl-10 pr-4 py-2 text-xs text-white focus:outline-none focus:border-[#F7941D]/50 w-full md:w-64 transition-all"
-                />
-              </div>
-              
-              <div className="flex items-center gap-2">
-                <Filter className="w-4 h-4 text-[#555568]" />
-                <select 
-                  value={filterStatus}
-                  onChange={(e) => setFilterStatus(e.target.value)}
-                  className="bg-white/[0.03] border border-white/10 rounded-xl px-4 py-2 text-xs text-white focus:outline-none focus:border-[#F7941D]/50 transition-all appearance-none"
-                >
-                  <option value="ALL">All Status</option>
-                  <option value="NOT_STARTED">Not Started</option>
-                  <option value="IN_PROGRESS">In Progress</option>
-                  <option value="WAITING_ON_INPUT">Waiting</option>
-                  <option value="AT_RISK">At Risk</option>
-                  <option value="BLOCKED">Blocked</option>
-                  <option value="COMPLETED">Completed</option>
-                </select>
-              </div>
-            </div>
-          </div>
-          
-          {loading ? (
-            <div className="p-20 text-center">
-              <div className="w-8 h-8 border-2 border-[#F7941D]/30 border-t-[#F7941D] rounded-full animate-spin mx-auto" />
-            </div>
-          ) : filteredObjectives.length > 0 ? (
-            <div className="overflow-x-auto">
-              <table className="w-full border-collapse">
-                <thead>
-                  <tr className="text-left border-b border-white/5">
-                    <th className="px-6 py-4 text-[10px] font-bold text-[#555568] uppercase tracking-widest">Objective</th>
-                    <th className="px-6 py-4 text-[10px] font-bold text-[#555568] uppercase tracking-widest">Priority</th>
-                    <th className="px-6 py-4 text-[10px] font-bold text-[#555568] uppercase tracking-widest">Due Date</th>
-                    <th className="px-6 py-4 text-[10px] font-bold text-[#555568] uppercase tracking-widest">Status</th>
-                    <th className="px-6 py-4 text-[10px] font-bold text-[#555568] uppercase tracking-widest text-right">Metrics</th>
-                    <th className="px-6 py-4 text-[10px] font-bold text-[#555568] uppercase tracking-widest text-right">Progress</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {filteredObjectives.map((obj) => {
-                    const dueDate = obj.dueDate instanceof Timestamp ? obj.dueDate.toDate() : new Date(obj.dueDate);
-                    const isOverdue = dueDate < new Date() && obj.status !== 'COMPLETED';
-                    
-                    // Calculate metric progress if available
-                    const metricProgress = obj.metrics?.[0] ? 
-                      Math.round(((obj.metrics[0].current - obj.metrics[0].baseline) / (obj.metrics[0].target - obj.metrics[0].baseline)) * 100) : 
-                      null;
-
-                    return (
-                      <tr 
-                        key={obj.id} 
-                        onClick={() => setSelectedObjectiveId(obj.id)}
-                        className="border-b border-white/[0.02] hover:bg-white/[0.01] transition-colors group cursor-pointer"
+      <main 
+        onWheel={handleWheel}
+        className="flex-1 overflow-hidden relative perspective-2000"
+      >
+        <AnimatePresence mode="wait" initial={false} custom={direction}>
+          <motion.div
+            key={sectionIndex}
+            custom={direction}
+            variants={{
+              enter: (direction: number) => ({
+                rotateX: direction > 0 ? 90 : -90,
+                opacity: 0,
+                z: -800,
+                scale: 0.8,
+                filter: 'blur(10px)'
+              }),
+              center: {
+                rotateX: 0,
+                opacity: 1,
+                z: 0,
+                scale: 1,
+                filter: 'blur(0px)',
+                transition: {
+                  duration: 1.2,
+                  ease: [0.19, 1, 0.22, 1]
+                }
+              },
+              exit: (direction: number) => ({
+                rotateX: direction > 0 ? -90 : 90,
+                opacity: 0,
+                z: -800,
+                scale: 0.8,
+                filter: 'blur(10px)',
+                transition: {
+                  duration: 1.0,
+                  ease: [0.19, 1, 0.22, 1]
+                }
+              })
+            }}
+            initial="enter"
+            animate="center"
+            exit="exit"
+            className="h-full w-full absolute inset-0"
+            style={{ backfaceVisibility: 'hidden', transformStyle: 'preserve-3d' }}
+          >
+            {sectionIndex === 0 && (
+              <section className="h-full flex flex-col px-16 md:px-24 py-12 overflow-hidden">
+          <header className="flex-1 flex flex-col justify-center">
+              <div className="flex-1 flex flex-col lg:flex-row items-stretch gap-12">
+                {/* Left: Strategic Briefing */}
+                <div className="flex-1 flex flex-col justify-center">
+                  <motion.p 
+                    initial={{ opacity: 0, y: 10 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    className="text-[var(--brand-10)] font-black text-xs uppercase tracking-[0.5em] mb-8"
+                  >
+                    The Morning Report • {new Date().toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' })}
+                  </motion.p>
+                  
+                  <AnimatePresence mode="wait">
+                    {isBriefingLoading ? (
+                      <motion.div 
+                        key="loading"
+                        initial={{ opacity: 0 }}
+                        animate={{ opacity: 1 }}
+                        exit={{ opacity: 0 }}
+                        className="flex items-center gap-4 text-[var(--accents-6)]"
                       >
-                        <td className="px-6 py-4">
-                          <div className="text-sm font-bold text-white group-hover:text-[#F7941D] transition-colors">{obj.title}</div>
-                        </td>
-                        <td className="px-6 py-4">
-                          <div className="flex items-center gap-2">
-                            <span className={`w-2 h-2 rounded-full ${
-                              obj.priority === 'CRITICAL' ? 'bg-red-500 shadow-[0_0_8px_rgba(239,68,68,0.4)]' :
-                              obj.priority === 'HIGH' ? 'bg-amber-500' :
-                              obj.priority === 'MEDIUM' ? 'bg-blue-500' : 'bg-slate-500'
-                            }`} />
-                            <span className="text-xs text-[#8C8CA0]">{obj.priority}</span>
-                          </div>
-                        </td>
-                        <td className="px-6 py-4">
-                          <div className={`text-xs font-mono ${isOverdue ? 'text-red-500 font-bold' : 'text-[#8C8CA0]'}`}>
-                            {dueDate.toLocaleDateString()}
-                          </div>
-                        </td>
-                        <td className="px-6 py-4">
-                          <span className={`text-[10px] font-bold px-2.5 py-1 rounded-full uppercase tracking-wider ${
-                            obj.status === 'COMPLETED' ? 'bg-emerald-500/10 text-emerald-500' :
-                            obj.status === 'AT_RISK' ? 'bg-amber-500/10 text-amber-500' :
-                            obj.status === 'BLOCKED' ? 'bg-red-500/10 text-red-500' :
-                            'bg-blue-500/10 text-blue-500'
-                          }`}>
-                            {obj.status.replace(/_/g, ' ')}
-                          </span>
-                        </td>
-                        <td className="px-6 py-4 text-right">
-                          {obj.metrics?.[0] ? (
-                            <div className="text-[10px] font-mono text-[#F7941D]">
-                              {obj.metrics[0].current} / {obj.metrics[0].target} {obj.metrics[0].unit}
+                        <RefreshCw className="w-6 h-6 animate-spin" />
+                        <span className="text-sm font-black uppercase tracking-[0.3em]">Synthesizing Daily Strategic Briefing...</span>
+                      </motion.div>
+                    ) : dailyBriefing ? (
+                      <motion.div 
+                        key="briefing"
+                        initial={{ opacity: 0, y: 30 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        transition={{ type: "spring", damping: 20 }}
+                        className="space-y-12"
+                      >
+                        <div className="relative">
+                          <h1 className="pitch-header">
+                            {dailyBriefing.headline}
+                          </h1>
+                          <div className="flex flex-col md:flex-row gap-12 items-start mt-8">
+                            <p className="text-xl md:text-2xl text-[var(--accents-9)] font-light leading-[1.2] max-w-2xl tracking-tight">
+                              {dailyBriefing.summary}
+                            </p>
+                            
+                            <div className="flex flex-col gap-8 border-l border-white/10 pl-12">
+                              <div className="space-y-2">
+                                <span className="text-[10px] font-black uppercase tracking-[0.3em] text-[var(--brand-10)]">Priority Focus</span>
+                                <p className="text-base text-white font-medium leading-snug max-w-xs">
+                                  {dailyBriefing.priorityFocus}
+                                </p>
+                              </div>
+                              <div className="space-y-2">
+                                <span className="text-[10px] font-black uppercase tracking-[0.3em] text-[var(--accents-6)]">Strategic Insight</span>
+                                <p className="text-base text-[var(--accents-6)] font-medium leading-snug max-w-xs">
+                                  {dailyBriefing.newsInsight}
+                                </p>
+                              </div>
                             </div>
-                          ) : (
-                            <span className="text-[10px] text-[#555568]">—</span>
-                          )}
-                        </td>
-                        <td className="px-6 py-4 text-right">
-                          <div className="flex items-center justify-end gap-3">
-                            <div className="w-24 h-1.5 bg-white/5 rounded-full overflow-hidden hidden sm:block">
-                              <div 
-                                className="h-full bg-[#F7941D] transition-all duration-500" 
-                                style={{ width: `${obj.percentComplete || 0}%` }}
-                              />
-                            </div>
-                            <span className="text-xs font-mono text-white">{obj.percentComplete || 0}%</span>
                           </div>
-                        </td>
-                      </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
-            </div>
-          ) : (
-            <div className="p-20 text-center">
-              <div className="w-16 h-16 bg-white/5 rounded-full flex items-center justify-center mx-auto mb-6">
-                <svg className="w-8 h-8 text-[#555568]" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-3 7h3m-3 4h3m-6-4h.01M9 16h.01" />
-                </svg>
+                        </div>
+                      </motion.div>
+                    ) : (
+                      <motion.h1 
+                        key="default"
+                        initial={{ opacity: 0, y: 20 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        className="pitch-header"
+                      >
+                        Strategic <br />
+                        <span className="text-[var(--accents-6)]">Intelligence</span>
+                      </motion.h1>
+                    )}
+                  </AnimatePresence>
+                </div>
+
+                {/* Right: Vertical Action Pillars */}
+                <div className="flex flex-col gap-6 w-full lg:w-[450px]">
+                  
+                  {canCreate && (
+                    <motion.button
+                      initial={{ opacity: 0, x: 20 }}
+                      animate={{ opacity: 1, x: 0 }}
+                      whileHover={{ scale: 1.02, y: -5 }}
+                      whileTap={{ scale: 0.98 }}
+                      onClick={() => setShowForm(true)}
+                      className="flex-1 group relative flex flex-col items-center justify-center gap-8 bg-gradient-to-br from-[var(--brand-10)]/20 via-[var(--brand-10)]/5 to-transparent border border-[var(--brand-10)]/30 rounded-[4rem] overflow-hidden transition-all duration-500 shadow-[0_40px_100px_rgba(247,148,29,0.15)]"
+                    >
+                      <div className="absolute inset-0 bg-[radial-gradient(circle_at_50%_0%,rgba(247,148,29,0.2),transparent_70%)] opacity-0 group-hover:opacity-100 transition-opacity duration-700" />
+                      <div className="relative">
+                        <div className="absolute inset-0 bg-[var(--brand-10)] blur-2xl opacity-20 group-hover:opacity-40 transition-opacity" />
+                        <div className="icon-container !bg-[var(--brand-10)] !w-28 !h-28 !shadow-[0_0_80px_rgba(247,148,29,0.5)] group-hover:scale-110 transition-transform duration-700 relative z-10">
+                          <Plus className="w-14 h-14 stroke-[3] text-white drop-shadow-lg" />
+                        </div>
+                      </div>
+                      <div className="text-center px-10 relative z-10">
+                        <span className="text-4xl font-black text-white uppercase tracking-tighter block mb-2 group-hover:tracking-tight transition-all">New Objective</span>
+                        <div className="flex items-center justify-center gap-2">
+                          <div className="w-1.5 h-1.5 rounded-full bg-[var(--brand-10)] animate-pulse" />
+                          <p className="text-[11px] font-black text-[var(--brand-10)] uppercase tracking-[0.4em] opacity-80">Let's get started</p>
+                        </div>
+                      </div>
+                    </motion.button>
+                  )}
+
+                  <motion.button
+                    initial={{ opacity: 0, x: 20 }}
+                    animate={{ opacity: 1, x: 0 }}
+                    transition={{ delay: 0.1 }}
+                    whileHover={{ scale: 1.02, y: -5 }}
+                    whileTap={{ scale: 0.98 }}
+                    onClick={scrollToRoadmap}
+                    className="flex-1 group relative flex flex-col items-center justify-center gap-8 bg-gradient-to-br from-indigo-500/20 via-indigo-500/5 to-transparent border border-indigo-500/30 rounded-[4rem] overflow-hidden transition-all duration-500 shadow-[0_40px_100px_rgba(99,102,241,0.15)]"
+                  >
+                    <div className="absolute inset-0 bg-[radial-gradient(circle_at_50%_0%,rgba(99,102,241,0.2),transparent_70%)] opacity-0 group-hover:opacity-100 transition-opacity duration-700" />
+                    <div className="relative">
+                      <div className="absolute inset-0 bg-indigo-500 blur-2xl opacity-20 group-hover:opacity-40 transition-opacity" />
+                      <div className="icon-container !bg-indigo-500 !w-28 !h-28 !shadow-[0_0_80px_rgba(99,102,241,0.5)] group-hover:scale-110 transition-transform duration-700 relative z-10">
+                        <TrendingUp className="w-14 h-14 stroke-[3] text-white drop-shadow-lg" />
+                      </div>
+                    </div>
+                    <div className="text-center px-10 relative z-10">
+                      <span className="text-4xl font-black text-white uppercase tracking-tighter block mb-2 group-hover:tracking-tight transition-all">Current Roadmap</span>
+                      <div className="flex items-center justify-center gap-2">
+                        <div className="w-1.5 h-1.5 rounded-full bg-indigo-400 animate-pulse" />
+                        <p className="text-[11px] font-black text-indigo-400 uppercase tracking-[0.4em] opacity-80">Where we're headed</p>
+                      </div>
+                    </div>
+                  </motion.button>
+                </div>
               </div>
-              <h3 className="text-lg font-bold text-white mb-2">No Objectives Found</h3>
-              <p className="text-[#8C8CA0] text-sm max-w-xs mx-auto">
-                {canCreate ? "Start by creating your first objective." : "You don't have any objectives assigned yet."}
-              </p>
+          </header>
+          
+          <motion.div 
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            transition={{ delay: 1.5 }}
+            className="absolute bottom-10 left-0 right-0 px-16 md:px-24 pointer-events-none"
+          >
+            <div className="flex flex-col lg:flex-row items-stretch gap-12">
+              <div className="flex-1">
+                <div className="flex flex-col md:flex-row gap-12 items-start">
+                  {/* Spacer to align with the briefing summary line above */}
+                  <div className="max-w-2xl w-full hidden md:block" />
+                  <div className="flex flex-col items-center gap-3 -translate-x-1/2">
+                    <span className="text-[9px] font-black uppercase tracking-[0.4em] text-center whitespace-nowrap">Keep going • Scroll to proceed</span>
+                    <div className="w-px h-16 bg-gradient-to-b from-[var(--brand-10)] via-[var(--brand-10)]/50 to-transparent shadow-[0_0_10px_rgba(247,148,29,0.2)]" />
+                  </div>
+                </div>
+              </div>
+              <div className="w-full lg:w-[450px] hidden lg:block" />
             </div>
-          )}
+          </motion.div>
+        </section>
+            )}
+
+            {sectionIndex === 1 && (
+              <section className="h-full flex flex-col px-16 md:px-24 bg-[var(--accents-1)] py-16 overflow-hidden">
+          {/* Top Widgets Grid */}
+          <div className="grid grid-cols-1 xl:grid-cols-4 gap-8 flex-1">
+          {/* Sources & AI Insights Widget */}
+          <section className="modern-card p-10 xl:col-span-3 flex flex-col min-h-[500px]">
+            <div className="flex flex-col md:flex-row md:items-center justify-between gap-6 mb-12">
+              <div className="flex items-center gap-6">
+                <div className="w-14 h-14 bg-[var(--brand-10)]/10 rounded-[1.5rem] flex items-center justify-center">
+                  <Brain className="w-8 h-8 text-[var(--brand-10)]" />
+                </div>
+                <div>
+                  <h3 className="text-xl font-black text-white tracking-tighter">The Knowledge Base</h3>
+                  <p className="text-xs text-[var(--accents-6)] font-bold uppercase tracking-widest mt-1">Making sense of the chaos</p>
+                </div>
+              </div>
+              <div className="flex items-center gap-4">
+                <button 
+                  onClick={() => setShowSourceInput(!showSourceInput)}
+                  className="secondary-button flex items-center gap-3"
+                >
+                  <Plus className="w-4 h-4" />
+                  <span>Add Source</span>
+                </button>
+                <button 
+                  onClick={runPortfolioSummary}
+                  disabled={isSummarizing || (objectives.length === 0 && sources.length === 0)}
+                  className="accent-button flex items-center gap-3 disabled:opacity-50"
+                >
+                  {isSummarizing ? <RefreshCw className="w-4 h-4 animate-spin" /> : <Zap className="w-4 h-4" />}
+                  <span>{portfolioSummary ? 'Re-Analyze' : 'Generate Insights'}</span>
+                </button>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-1 lg:grid-cols-5 gap-12 flex-1">
+              {/* Sources List */}
+              <div className="lg:col-span-2 flex flex-col">
+                <div className="text-[10px] font-black text-[var(--accents-6)] uppercase tracking-[0.3em] mb-6">What we know ({sources.length})</div>
+                
+                <AnimatePresence>
+                  {showSourceInput && (
+                    <motion.div 
+                      initial={{ height: 0, opacity: 0 }}
+                      animate={{ height: 'auto', opacity: 1 }}
+                      exit={{ height: 0, opacity: 0 }}
+                      className="mb-6 overflow-hidden"
+                    >
+                      <textarea 
+                        value={newSourceText}
+                        onChange={(e) => setNewSourceText(e.target.value)}
+                        placeholder="Paste strategic notes, market data, or project updates..."
+                        className="modern-input w-full h-32 text-sm mb-4 resize-none"
+                      />
+                      <div className="flex justify-end gap-4">
+                        <button onClick={() => setShowSourceInput(false)} className="text-[10px] font-black text-[var(--accents-6)] uppercase hover:text-white transition-all">Discard</button>
+                        <button onClick={addSource} className="text-[10px] font-black text-[var(--brand-10)] uppercase hover:brightness-125 transition-all">Commit to Database</button>
+                      </div>
+                    </motion.div>
+                  )}
+                </AnimatePresence>
+
+                <div className="flex-1 overflow-y-auto space-y-3 pr-4 custom-scrollbar">
+                  {sources.length > 0 ? (
+                    sources.map(source => (
+                      <motion.div 
+                        layout
+                        key={source.id} 
+                        className="flex items-center justify-between p-5 bg-white/[0.02] border border-white/5 rounded-2xl group/source hover:bg-white/[0.04] hover:border-[var(--brand-10)]/30 transition-all"
+                      >
+                        <div className="flex items-center gap-4 min-w-0">
+                          <div className="w-8 h-8 rounded-xl bg-white/5 flex items-center justify-center text-[var(--accents-6)]">
+                            <Plus className="w-4 h-4" />
+                          </div>
+                          <span className="text-sm font-bold text-[var(--accents-9)] truncate">{source.name}</span>
+                        </div>
+                        <button 
+                          onClick={() => removeSource(source.id)}
+                          className="opacity-0 group-hover/source:opacity-100 p-2 hover:bg-[var(--error-5)]/10 rounded-xl transition-all text-[var(--accents-6)] hover:text-[var(--error-9)]"
+                        >
+                          <Plus className="w-4 h-4 rotate-45" />
+                        </button>
+                      </motion.div>
+                    ))
+                  ) : (
+                    <div className="h-full flex flex-col items-center justify-center border-2 border-dashed border-white/5 rounded-[2rem] opacity-30 p-10 text-center">
+                      <Plus className="w-10 h-10 text-[var(--accents-6)] mb-4" />
+                      <p className="text-[10px] text-[var(--accents-6)] font-black uppercase tracking-[0.2em]">No sources connected</p>
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              {/* Analysis Output */}
+              <div className="lg:col-span-3 flex flex-col">
+                <div className="text-[10px] font-black text-[var(--accents-6)] uppercase tracking-[0.3em] mb-6">The AI's take</div>
+                {portfolioSummary ? (
+                  <motion.div 
+                    initial={{ opacity: 0, scale: 0.98 }}
+                    animate={{ opacity: 1, scale: 1 }}
+                    className="flex-1 bg-white/[0.01] border border-white/5 rounded-[2rem] p-8 overflow-y-auto custom-scrollbar"
+                  >
+                    <div className="text-base text-[var(--accents-9)] leading-relaxed whitespace-pre-wrap font-medium">
+                      {portfolioSummary}
+                    </div>
+                  </motion.div>
+                ) : (
+                  <div className="flex-1 flex items-center justify-center border-2 border-dashed border-white/5 rounded-[2rem] opacity-30 p-10 text-center">
+                    <p className="text-[10px] text-[var(--accents-6)] font-black uppercase tracking-[0.2em] max-w-xs leading-loose">
+                      {isSummarizing ? 'Synthesizing global knowledge base...' : 'Connect sources and initiate analysis to generate strategic insights'}
+                    </p>
+                  </div>
+                )}
+              </div>
+            </div>
+          </section>
+
+          {/* KPI Summary Widget */}
+          <section className="modern-card p-10 flex flex-col">
+            <div className="flex items-center justify-between mb-12">
+              <h3 className="text-sm font-black text-white uppercase tracking-[0.2em]">How we're doing</h3>
+              <div className="w-2 h-2 rounded-full bg-[var(--success-9)] animate-pulse" />
+            </div>
+            
+            <div className="grid grid-cols-1 gap-6 flex-1">
+              {[
+                { label: "Active", value: kpis.open, color: "text-[var(--brand-10)]", bg: "bg-[var(--brand-10)]/5" },
+                { label: "Overdue", value: kpis.overdue, color: "text-[var(--error-9)]", bg: "bg-[var(--error-9)]/5" },
+                { label: "Due Soon", value: kpis.dueSoon, color: "text-[var(--warning-9)]", bg: "bg-[var(--warning-9)]/5" },
+                { label: "Completed", value: kpis.completed, color: "text-[var(--success-9)]", bg: "bg-[var(--success-9)]/5" }
+              ].map((kpi, i) => (
+                <div key={i} className={`${kpi.bg} border border-white/5 rounded-3xl p-6 flex items-center justify-between group hover:border-white/10 transition-all`}>
+                  <div>
+                    <div className="text-[10px] font-black tracking-[0.2em] text-[var(--accents-6)] uppercase mb-1">{kpi.label}</div>
+                    <div className={`text-4xl font-black ${kpi.color} tracking-tighter`}>{kpi.value}</div>
+                  </div>
+                  <ChevronRight className="w-5 h-5 text-[var(--accents-4)] group-hover:text-white transition-all" />
+                </div>
+              ))}
+            </div>
+          </section>
         </div>
+      </section>
+            )}
+
+            {sectionIndex === 2 && (
+              <section className="h-full flex flex-col px-16 md:px-24 bg-[var(--accents-1)] py-16 overflow-hidden">
+                <Roadmap />
+              </section>
+            )}
+          </motion.div>
+        </AnimatePresence>
+
+        {/* Scanline overlay for "switch" feel */}
+        {(isTransitioning || glitchActive) && (
+          <div className="fixed inset-0 z-[200] pointer-events-none overflow-hidden">
+            <motion.div 
+              initial={{ opacity: 0 }}
+              animate={{ opacity: [0, 1, 0.5, 1, 0] }}
+              transition={{ duration: 0.5 }}
+              className="absolute inset-0 bg-[var(--brand-10)]/5 backdrop-blur-[2px]"
+            />
+            <div className="absolute inset-0 bg-[linear-gradient(rgba(18,16,16,0)_50%,rgba(0,0,0,0.1)_50%),linear-gradient(90deg,rgba(255,0,0,0.03),rgba(0,255,0,0.01),rgba(0,0,255,0.03))] bg-[length:100%_2px,3px_100%]" />
+            <div className="w-full h-1 bg-[var(--brand-10)] shadow-[0_0_30px_var(--brand-10)] animate-scanline absolute top-0" />
+            <div className="w-full h-px bg-[var(--brand-10)]/20 absolute top-1/4" />
+            <div className="w-full h-px bg-[var(--brand-10)]/20 absolute top-3/4" />
+            
+            {/* Technical readout flicker */}
+            <div className="absolute top-10 right-10 font-mono text-[8px] text-[var(--brand-10)] opacity-60 flex flex-col items-end gap-1">
+              <div className="flex items-center gap-2">
+                <span className="w-1 h-1 rounded-full bg-[var(--brand-10)] animate-pulse" />
+                SESSION_ID: {Math.random().toString(36).substr(2, 9).toUpperCase()}
+              </div>
+              <div>SYNC_STATUS: ACTIVE</div>
+              <div>RE-CALIBRATING: {Math.floor(Math.random() * 100)}%</div>
+            </div>
+          </div>
+        )}
       </main>
+
 
       {showForm && <ObjectiveForm onClose={() => setShowForm(false)} />}
       {selectedObjectiveId && (

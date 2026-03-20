@@ -178,88 +178,101 @@ export const ObjectiveDetails: React.FC<ObjectiveDetailsProps> = ({ objectiveId,
 
   return (
     <div className="fixed inset-0 bg-black/80 backdrop-blur-sm z-[60] flex items-center justify-center p-4">
-      <div className="paper-card w-full max-w-2xl rounded-2xl shadow-2xl flex flex-col max-h-[90vh]">
+      <div className="modern-card w-full max-w-2xl rounded-[2.5rem] shadow-2xl flex flex-col max-h-[90vh] overflow-hidden">
         {/* Header */}
-        <div className="p-6 border-b border-white/5 flex items-center justify-between">
+        <div className="p-8 border-b border-white/5 flex items-center justify-between bg-white/[0.02]">
           <div>
-            <div className="flex items-center gap-3 mb-1">
-              <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full uppercase tracking-wider ${
-                objective.status === 'COMPLETED' ? 'bg-emerald-500/10 text-emerald-500' :
-                objective.status === 'AT_RISK' ? 'bg-amber-500/10 text-amber-500' :
-                objective.status === 'BLOCKED' ? 'bg-red-500/10 text-red-500' :
-                'bg-blue-500/10 text-blue-500'
+            <div className="flex items-center gap-3 mb-2">
+              <span className={`text-[10px] font-black px-3 py-1 rounded-lg uppercase tracking-[0.2em] border ${
+                objective.status === 'COMPLETED' ? 'bg-emerald-500/10 text-emerald-500 border-emerald-500/20' :
+                objective.status === 'AT_RISK' ? 'bg-amber-500/10 text-amber-500 border-amber-500/20' :
+                objective.status === 'BLOCKED' ? 'bg-red-500/10 text-red-500 border-red-500/20' :
+                'bg-blue-500/10 text-blue-500 border-blue-500/20'
               }`}>
                 {objective.status.replace(/_/g, ' ')}
               </span>
-              <span className="text-[10px] text-[#555568] font-mono uppercase tracking-widest">
+              <span className="text-[10px] text-[var(--accents-6)] font-bold uppercase tracking-[0.2em]">
                 Priority: {objective.priority}
               </span>
             </div>
-            <h2 className="text-xl font-black text-white tracking-tight">{objective.title}</h2>
+            <h2 className="text-2xl font-black text-white tracking-tighter">{objective.title}</h2>
           </div>
-          <button onClick={onClose} className="p-2 hover:bg-white/5 rounded-lg transition-colors text-[#555568] hover:text-white">
-            <X className="w-5 h-5" />
+          <button onClick={onClose} className="p-3 hover:bg-white/5 rounded-xl transition-colors text-[var(--accents-6)] hover:text-white">
+            <X className="w-6 h-6" />
           </button>
         </div>
 
         {/* Content */}
-        <div className="flex-1 overflow-y-auto p-6 space-y-8">
+        <div className="flex-1 overflow-y-auto p-8 space-y-10">
           {/* AI Risk Analysis Section */}
-          <section className="bg-white/[0.02] border border-white/5 rounded-2xl p-6 relative overflow-hidden group">
-            <div className="absolute top-0 right-0 p-4 opacity-10 group-hover:opacity-20 transition-opacity">
-              <Sparkles className="w-12 h-12 text-[#F7941D]" />
+          <section className="glass-panel p-8 relative overflow-hidden group border-l-4 border-l-[var(--brand-10)]">
+            <div className="absolute top-0 right-0 p-6 opacity-[0.03] group-hover:opacity-[0.07] transition-opacity">
+              <Sparkles className="w-32 h-32 text-[var(--brand-10)]" />
             </div>
             
-            <div className="flex items-center justify-between mb-6">
-              <div className="flex items-center gap-3">
-                <div className="p-2 bg-[#F7941D]/10 rounded-lg">
-                  <Brain className="w-5 h-5 text-[#F7941D]" />
+            <div className="flex items-center justify-between mb-10">
+              <div className="flex items-center gap-5">
+                <div className="p-4 bg-[var(--brand-10)]/10 rounded-2xl shadow-[0_0_20px_rgba(247,148,29,0.1)]">
+                  <Brain className="w-7 h-7 text-[var(--brand-10)]" />
                 </div>
                 <div>
-                  <h3 className="text-xs font-black text-white uppercase tracking-widest">AI Strategic Risk Analysis</h3>
-                  <p className="text-[10px] text-[#555568] font-bold uppercase tracking-tighter">Powered by Gemini 3.0 Flash</p>
+                  <h3 className="text-sm font-black text-white uppercase tracking-[0.2em]">Strategic Risk Assessment</h3>
+                  <p className="text-[10px] text-[var(--accents-6)] font-bold uppercase tracking-widest mt-1">Intelligence Core: Gemini 3.0 Flash</p>
                 </div>
               </div>
               <button 
                 onClick={runRiskAnalysis}
                 disabled={isAnalyzing}
-                className="paper-button px-4 py-2 bg-[#F7941D]/10 hover:bg-[#F7941D]/20 text-[#F7941D] text-[10px] font-black uppercase tracking-widest rounded-xl flex items-center gap-2 disabled:opacity-50"
+                className="secondary-button !text-[10px] !py-2.5 !px-5 flex items-center gap-2.5 disabled:opacity-50 transition-all hover:scale-105 active:scale-95"
               >
-                {isAnalyzing ? <RefreshCw className="w-3 h-3 animate-spin" /> : <Sparkles className="w-3 h-3" />}
-                {riskAnalysis ? 'Refresh Analysis' : 'Run Analysis'}
+                {isAnalyzing ? <RefreshCw className="w-3.5 h-3.5 animate-spin" /> : <Sparkles className="w-3.5 h-3.5" />}
+                {riskAnalysis ? 'Recalibrate Intelligence' : 'Initialize Analysis'}
               </button>
             </div>
 
             {riskAnalysis ? (
-              <div className="space-y-4 animate-in fade-in slide-in-from-top-2 duration-500">
-                <div className="flex items-center gap-4">
-                  <div className={`px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-widest border ${
-                    riskAnalysis.riskLevel === 'CRITICAL' ? 'bg-red-500/20 text-red-500 border-red-500/20' :
-                    riskAnalysis.riskLevel === 'HIGH' ? 'bg-[#F7941D]/20 text-[#F7941D] border-[#F7941D]/20' :
-                    riskAnalysis.riskLevel === 'MEDIUM' ? 'bg-blue-500/20 text-blue-500 border-blue-500/20' :
-                    'bg-emerald-500/20 text-emerald-500 border-emerald-500/20'
+              <div className="space-y-8 animate-in fade-in slide-in-from-top-4 duration-700">
+                <div className="flex items-center gap-8">
+                  <div className={`px-5 py-2 rounded-xl text-[10px] font-black uppercase tracking-[0.3em] border shadow-lg ${
+                    riskAnalysis.riskLevel === 'CRITICAL' ? 'bg-red-500/20 text-red-500 border-red-500/30 shadow-red-500/10' :
+                    riskAnalysis.riskLevel === 'HIGH' ? 'bg-[var(--brand-10)]/20 text-[var(--brand-10)] border-[var(--brand-10)]/30 shadow-[var(--brand-10)]/10' :
+                    riskAnalysis.riskLevel === 'MEDIUM' ? 'bg-blue-500/20 text-blue-500 border-blue-500/30 shadow-blue-500/10' :
+                    'bg-emerald-500/20 text-emerald-500 border-emerald-500/30 shadow-emerald-500/10'
                   }`}>
-                    Risk Level: {riskAnalysis.riskLevel}
+                    Risk Profile: {riskAnalysis.riskLevel}
                   </div>
-                  <div className="text-[10px] text-[#555568] font-mono">Confidence: {Math.round(riskAnalysis.confidence * 100)}%</div>
+                  <div className="flex items-center gap-2">
+                    <div className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
+                    <div className="text-[10px] text-[var(--accents-6)] font-mono font-bold uppercase tracking-widest">Confidence Index: {Math.round(riskAnalysis.confidence * 100)}%</div>
+                  </div>
                 </div>
                 
-                <p className="text-sm text-[#8C8CA0] leading-relaxed italic border-l-2 border-[#F7941D]/30 pl-4">
-                  "{riskAnalysis.summary}"
-                </p>
+                <div className="relative">
+                  <div className="absolute -left-8 top-0 bottom-0 w-1 bg-gradient-to-b from-[var(--brand-10)] via-[var(--brand-10)]/50 to-transparent opacity-30" />
+                  <p className="text-[13px] text-[var(--accents-7)] leading-relaxed italic font-medium">
+                    "{riskAnalysis.summary}"
+                  </p>
+                </div>
 
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
                   {riskAnalysis.recommendations.map((rec, i) => (
-                    <div key={i} className="flex items-start gap-2 p-3 bg-white/[0.01] border border-white/5 rounded-xl">
-                      <TrendingUp className="w-3 h-3 text-[#F7941D] mt-0.5 flex-shrink-0" />
-                      <span className="text-[11px] text-[#8C8CA0] leading-tight">{rec}</span>
+                    <div key={i} className="flex items-start gap-4 p-5 bg-white/[0.01] border border-white/5 rounded-2xl hover:bg-white/[0.02] transition-colors group/rec">
+                      <div className="p-1.5 bg-[var(--brand-10)]/5 rounded-lg group-hover/rec:bg-[var(--brand-10)]/10 transition-colors">
+                        <TrendingUp className="w-4 h-4 text-[var(--brand-10)]" />
+                      </div>
+                      <span className="text-xs text-[var(--accents-7)] leading-relaxed font-medium">{rec}</span>
                     </div>
                   ))}
                 </div>
               </div>
             ) : (
-              <div className="text-center py-4">
-                <p className="text-[11px] text-[#555568] font-bold uppercase tracking-widest">No analysis performed for this objective cycle yet.</p>
+              <div className="text-center py-12 border border-dashed border-white/10 rounded-3xl bg-white/[0.01]">
+                <div className="mb-4 flex justify-center">
+                  <Sparkles className="w-8 h-8 text-[var(--accents-6)] opacity-20" />
+                </div>
+                <p className="text-[11px] text-[var(--accents-6)] font-bold uppercase tracking-[0.2em] max-w-[280px] mx-auto leading-loose">
+                  Strategic intelligence core idle. Initialize analysis to identify potential execution risks.
+                </p>
               </div>
             )}
           </section>
@@ -267,45 +280,47 @@ export const ObjectiveDetails: React.FC<ObjectiveDetailsProps> = ({ objectiveId,
           {/* Metrics Section */}
           {objective.metrics && objective.metrics.length > 0 && (
             <section>
-              <h3 className="text-[10px] font-bold text-[#555568] uppercase tracking-widest mb-3">Metric Tracking</h3>
-              <div className="space-y-4">
+              <h3 className="text-[10px] font-bold text-[var(--accents-6)] uppercase tracking-[0.2em] mb-6 px-2">Metric Tracking</h3>
+              <div className="space-y-6">
                 {objective.metrics.map((metric: any, idx: number) => {
                   const progress = Math.min(100, Math.max(0, ((metric.current - metric.baseline) / (metric.target - metric.baseline)) * 100));
                   return (
-                    <div key={idx} className="bg-white/[0.02] border border-white/5 p-4 rounded-xl">
-                      <div className="flex justify-between items-end mb-2">
+                    <div key={idx} className="bg-white/[0.02] border border-white/5 p-6 rounded-2xl">
+                      <div className="flex justify-between items-end mb-4">
                         <div>
-                          <div className="text-[10px] font-bold text-[#555568] uppercase mb-1">{metric.label}</div>
-                          <div className="text-lg font-black text-white font-mono">
-                            {metric.current} <span className="text-xs font-normal text-[#555568]">{metric.unit}</span>
+                          <div className="text-[10px] font-bold text-[var(--accents-6)] uppercase tracking-widest mb-2">{metric.label}</div>
+                          <div className="text-2xl font-black text-white font-mono">
+                            {metric.current} <span className="text-xs font-normal text-[var(--accents-6)]">{metric.unit}</span>
                           </div>
                         </div>
                         <div className="text-right">
-                          <div className="text-[10px] font-bold text-[#555568] uppercase mb-1">Target</div>
-                          <div className="text-sm font-bold text-[#F7941D] font-mono">{metric.target} {metric.unit}</div>
+                          <div className="text-[10px] font-bold text-[var(--accents-6)] uppercase tracking-widest mb-2">Target</div>
+                          <div className="text-lg font-black text-[var(--brand-10)] font-mono">{metric.target} {metric.unit}</div>
                         </div>
                       </div>
-                      <div className="w-full h-2 bg-white/5 rounded-full overflow-hidden">
+                      <div className="w-full h-2 bg-white/5 rounded-full overflow-hidden mb-6">
                         <div 
-                          className="h-full bg-[#F7941D] transition-all duration-500" 
+                          className="h-full bg-[var(--brand-10)] transition-all duration-700 ease-out" 
                           style={{ width: `${progress}%` }}
                         />
                       </div>
-                      <div className="mt-4 flex gap-2">
-                        <input 
-                          type="number"
-                          value={metric.current}
-                          onChange={(e) => updateMetric(idx, Number(e.target.value))}
-                          className="paper-input w-24 px-3 py-1 text-xs text-white rounded-lg"
-                        />
-                        <span className="text-[10px] text-[#555568] self-center uppercase font-bold">Update Current</span>
+                      <div className="flex flex-col sm:flex-row gap-4">
+                        <div className="flex-1 flex gap-3">
+                          <input 
+                            type="number"
+                            value={metric.current}
+                            onChange={(e) => updateMetric(idx, Number(e.target.value))}
+                            className="modern-input w-32 text-sm"
+                          />
+                          <span className="text-[10px] text-[var(--accents-6)] self-center uppercase font-bold tracking-widest">Update Current</span>
+                        </div>
                         
                         {metric.externalSource && metric.externalSource !== 'MANUAL' && (
                           <button
                             onClick={() => syncMetric(idx)}
-                            className="ml-auto flex items-center gap-1 text-[10px] font-bold text-[#F7941D] uppercase hover:underline"
+                            className="flex items-center gap-2 text-[10px] font-black text-[var(--brand-10)] uppercase hover:underline tracking-widest"
                           >
-                            <RefreshCw className="w-3 h-3" />
+                            <RefreshCw className="w-4 h-4" />
                             Sync {metric.externalSource.replace('_', ' ')}
                           </button>
                         )}
@@ -320,20 +335,20 @@ export const ObjectiveDetails: React.FC<ObjectiveDetailsProps> = ({ objectiveId,
           {/* Subtasks Section */}
           {objective.subtasks && objective.subtasks.length > 0 && (
             <section>
-              <h3 className="text-[10px] font-bold text-[#555568] uppercase tracking-widest mb-3">Execution Steps</h3>
-              <div className="space-y-2">
+              <h3 className="text-[10px] font-bold text-[var(--accents-6)] uppercase tracking-[0.2em] mb-6 px-2">Execution Steps</h3>
+              <div className="space-y-3">
                 {objective.subtasks.map((st: any) => (
                   <button
                     key={st.id}
                     onClick={() => toggleSubtask(st.id)}
-                    className="w-full flex items-center gap-3 p-3 bg-white/[0.02] border border-white/5 rounded-xl hover:bg-white/[0.04] transition-colors text-left group"
+                    className="w-full flex items-center gap-4 p-5 bg-white/[0.02] border border-white/5 rounded-2xl hover:bg-white/[0.04] transition-all text-left group"
                   >
-                    <div className={`w-5 h-5 rounded border flex items-center justify-center transition-colors ${
-                      st.completed ? 'bg-emerald-500 border-emerald-500' : 'border-[#555568] group-hover:border-[#F7941D]'
+                    <div className={`w-6 h-6 rounded-lg border-2 flex items-center justify-center transition-all ${
+                      st.completed ? 'bg-emerald-500 border-emerald-500' : 'border-[var(--accents-6)] group-hover:border-[var(--brand-10)]'
                     }`}>
-                      {st.completed && <CheckCircle2 className="w-3 h-3 text-white" />}
+                      {st.completed && <CheckCircle2 className="w-4 h-4 text-white" />}
                     </div>
-                    <span className={`text-sm ${st.completed ? 'text-[#555568] line-through' : 'text-[#8C8CA0]'}`}>
+                    <span className={`text-sm font-bold transition-all ${st.completed ? 'text-[var(--accents-6)] line-through' : 'text-[var(--accents-7)] group-hover:text-white'}`}>
                       {st.title}
                     </span>
                   </button>
@@ -344,16 +359,16 @@ export const ObjectiveDetails: React.FC<ObjectiveDetailsProps> = ({ objectiveId,
 
           {/* Description */}
           <section>
-            <h3 className="text-[10px] font-bold text-[#555568] uppercase tracking-widest mb-3">Context</h3>
-            <p className="text-[#8C8CA0] text-sm leading-relaxed bg-white/[0.02] p-4 rounded-xl border border-white/5">
+            <h3 className="text-[10px] font-bold text-[var(--accents-6)] uppercase tracking-[0.2em] mb-6 px-2">Context</h3>
+            <p className="text-[var(--accents-7)] text-sm leading-relaxed bg-white/[0.02] p-6 rounded-2xl border border-white/5">
               {objective.description || "No description provided."}
             </p>
           </section>
 
           {/* Status Controls */}
           <section>
-            <h3 className="text-[10px] font-bold text-[#555568] uppercase tracking-widest mb-3">Execution Status</h3>
-            <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+            <h3 className="text-[10px] font-bold text-[var(--accents-6)] uppercase tracking-[0.2em] mb-6 px-2">Execution Status</h3>
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
               {[
                 { id: 'ON_TRACK', label: 'On Track', icon: Clock, color: 'hover:bg-blue-500/10 hover:text-blue-500' },
                 { id: 'AT_RISK', label: 'At Risk', icon: AlertCircle, color: 'hover:bg-amber-500/10 hover:text-amber-500' },
@@ -363,11 +378,11 @@ export const ObjectiveDetails: React.FC<ObjectiveDetailsProps> = ({ objectiveId,
                 <button
                   key={btn.id}
                   onClick={() => updateStatus(btn.id)}
-                  className={`flex flex-col items-center gap-2 p-3 rounded-xl border border-white/5 transition-all text-[10px] font-bold uppercase tracking-widest ${
-                    objective.status === btn.id ? 'bg-white/10 text-white border-white/20' : 'text-[#555568] ' + btn.color
+                  className={`flex flex-col items-center gap-3 p-5 rounded-2xl border border-white/5 transition-all text-[10px] font-black uppercase tracking-[0.2em] ${
+                    objective.status === btn.id ? 'bg-white/10 text-white border-white/20 shadow-lg' : 'text-[var(--accents-6)] ' + btn.color
                   }`}
                 >
-                  <btn.icon className="w-4 h-4" />
+                  <btn.icon className="w-5 h-5" />
                   {btn.label}
                 </button>
               ))}
@@ -376,73 +391,85 @@ export const ObjectiveDetails: React.FC<ObjectiveDetailsProps> = ({ objectiveId,
 
           {/* Updates Feed */}
           <section>
-            <h3 className="text-[10px] font-bold text-[#555568] uppercase tracking-widest mb-4">Execution Log</h3>
+            <h3 className="text-[10px] font-bold text-[var(--accents-6)] uppercase tracking-[0.2em] mb-6 px-2">Execution Log</h3>
             
-            <form onSubmit={handleAddUpdate} className="mb-6">
+            <form onSubmit={handleAddUpdate} className="mb-8">
               <div className="relative">
                 <textarea
                   value={newUpdate}
                   onChange={(e) => setNewUpdate(e.target.value)}
                   placeholder="Add a progress update..."
-                  className="paper-input w-full rounded-xl p-4 text-sm text-white placeholder:text-[#555568] resize-none h-24"
+                  className="modern-input w-full rounded-2xl p-6 text-sm text-white placeholder:text-[var(--accents-6)] resize-none h-32"
                 />
                 <button
                   type="submit"
                   disabled={!newUpdate.trim()}
-                  className="absolute bottom-3 right-3 p-2 bg-[#F7941D] text-white rounded-lg hover:bg-[#E8850A] transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                  className="absolute bottom-4 right-4 p-3 bg-[var(--brand-10)] text-white rounded-xl hover:brightness-110 transition-all shadow-lg shadow-[var(--brand-10)]/20 disabled:opacity-50 disabled:cursor-not-allowed"
                 >
-                  <MessageSquare className="w-4 h-4" />
+                  <MessageSquare className="w-5 h-5" />
                 </button>
               </div>
             </form>
 
             <div className="space-y-4">
               {updates.map((update) => (
-                <div key={update.id} className="bg-white/[0.02] border border-white/5 rounded-xl p-4">
-                  <div className="flex items-center justify-between mb-2">
-                    <span className="text-xs font-bold text-white">{update.authorName}</span>
-                    <span className="text-[10px] text-[#555568] font-mono">
+                <div key={update.id} className="bg-white/[0.02] border border-white/5 rounded-2xl p-6">
+                  <div className="flex items-center justify-between mb-3">
+                    <span className="text-xs font-black text-white uppercase tracking-widest">{update.authorName}</span>
+                    <span className="text-[10px] text-[var(--accents-6)] font-mono font-bold">
                       {update.createdAt?.toDate().toLocaleString()}
                     </span>
                   </div>
-                  <p className="text-sm text-[#8C8CA0]">{update.text}</p>
+                  <p className="text-sm text-[var(--accents-7)] leading-relaxed">{update.text}</p>
                 </div>
               ))}
             </div>
           </section>
 
           {/* Status History Section */}
-          <section>
-            <div className="flex items-center gap-2 mb-4">
-              <History className="w-4 h-4 text-[#555568]" />
-              <h3 className="text-[10px] font-bold text-[#555568] uppercase tracking-widest">Audit Trail</h3>
+          <section className="pb-12">
+            <div className="flex items-center justify-between mb-10 px-2">
+              <div className="flex items-center gap-4">
+                <div className="p-2.5 bg-white/5 rounded-xl">
+                  <History className="w-5 h-5 text-[var(--accents-6)]" />
+                </div>
+                <h3 className="text-[10px] font-bold text-[var(--accents-6)] uppercase tracking-[0.2em]">Strategic Audit Trail</h3>
+              </div>
+              <div className="h-px flex-1 bg-gradient-to-r from-white/5 to-transparent ml-6" />
             </div>
             
-            <div className="space-y-4 relative before:absolute before:left-[11px] before:top-2 before:bottom-2 before:w-px before:bg-white/5">
+            <div className="space-y-10 relative before:absolute before:left-[19px] before:top-2 before:bottom-2 before:w-px before:bg-gradient-to-b before:from-white/10 before:via-white/5 before:to-transparent">
               {history.map((entry) => (
-                <div key={entry.id} className="relative pl-8">
-                  <div className="absolute left-0 top-1.5 w-6 h-6 bg-[#0B0C10] border border-white/10 rounded-full flex items-center justify-center z-10">
-                    <div className="w-2 h-2 bg-[#F7941D] rounded-full" />
+                <div key={entry.id} className="relative pl-12 group/audit">
+                  <div className="absolute left-0 top-1 w-10 h-10 bg-[var(--accents-1)] border border-white/10 rounded-full flex items-center justify-center z-10 shadow-xl group-hover/audit:border-[var(--brand-10)]/30 transition-colors">
+                    <div className="w-3 h-3 bg-[var(--brand-10)] rounded-full shadow-[0_0_15px_rgba(247,148,29,0.5)] animate-pulse" />
                   </div>
-                  <div className="flex flex-col gap-1">
-                    <div className="flex items-center gap-2 text-[10px] font-black uppercase tracking-widest">
-                      <span className="text-[#8C8CA0]">{entry.oldStatus}</span>
-                      <ChevronRight className="w-3 h-3 text-[#555568]" />
-                      <span className="text-white">{entry.newStatus}</span>
+                  <div className="flex flex-col gap-3">
+                    <div className="flex items-center gap-4">
+                      <div className="flex items-center gap-3 text-[10px] font-black uppercase tracking-[0.2em]">
+                        <span className="text-[var(--accents-6)] line-through opacity-50">{entry.oldStatus.replace(/_/g, ' ')}</span>
+                        <ChevronRight className="w-4 h-4 text-[var(--brand-10)]" />
+                        <span className="text-white bg-white/5 px-3 py-1 rounded-lg border border-white/10">{entry.newStatus.replace(/_/g, ' ')}</span>
+                      </div>
                     </div>
-                    <div className="flex items-center gap-2 text-[9px] text-[#555568] font-bold uppercase">
-                      <span>{entry.changedByName}</span>
-                      <span className="w-1 h-1 bg-[#555568] rounded-full" />
-                      <span className="font-mono">{entry.timestamp?.toDate().toLocaleString()}</span>
+                    <div className="flex items-center gap-3 text-[9px] text-[var(--accents-6)] font-bold uppercase tracking-widest">
+                      <span className="text-white/80">{entry.changedByName}</span>
+                      <span className="w-1.5 h-1.5 bg-white/10 rounded-full" />
+                      <span className="font-mono opacity-60">{entry.timestamp?.toDate().toLocaleString()}</span>
                     </div>
                     {entry.comment && (
-                      <p className="text-[11px] text-[#555568] italic mt-1">{entry.comment}</p>
+                      <div className="relative">
+                        <div className="absolute left-0 top-0 bottom-0 w-0.5 bg-white/5" />
+                        <p className="text-[11px] text-[var(--accents-6)] italic pl-4 leading-relaxed">{entry.comment}</p>
+                      </div>
                     )}
                   </div>
                 </div>
               ))}
               {history.length === 0 && (
-                <p className="text-[11px] text-[#555568] italic pl-8">No status changes recorded yet.</p>
+                <div className="pl-12 py-4">
+                  <p className="text-[11px] text-[var(--accents-6)] italic uppercase tracking-widest opacity-40">No strategic shifts recorded in the current cycle.</p>
+                </div>
               )}
             </div>
           </section>

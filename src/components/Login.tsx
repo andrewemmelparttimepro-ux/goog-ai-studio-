@@ -40,19 +40,19 @@ export const Login: React.FC = () => {
   };
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-[#0B0C10] p-6 relative overflow-hidden">
+    <div className="min-h-screen flex items-center justify-center bg-[var(--accents-1)] p-6 relative overflow-hidden">
       {/* Background Accents */}
-      <div className="absolute top-[-10%] left-[-10%] w-[40%] h-[40%] bg-[#F7941D]/5 blur-[120px] rounded-full" />
-      <div className="absolute bottom-[-10%] right-[-10%] w-[40%] h-[40%] bg-[#2C3E50]/10 blur-[120px] rounded-full" />
+      <div className="absolute top-[-10%] left-[-10%] w-[40%] h-[40%] bg-[var(--brand-10)]/5 blur-[120px] rounded-full" />
+      <div className="absolute bottom-[-10%] right-[-10%] w-[40%] h-[40%] bg-[var(--brand-10)]/5 blur-[120px] rounded-full" />
 
-      <div className="max-w-md w-full bg-[#151619] border border-white/5 rounded-2xl p-10 shadow-2xl relative z-10">
+      <div className="max-w-md w-full modern-card p-10 relative z-10">
         <div className="text-center mb-10">
-          <div className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full bg-[#F7941D]/10 border border-[#F7941D]/20 text-[#F7941D] text-[10px] font-bold tracking-[0.2em] uppercase mb-6">
-            <span className="w-1.5 h-1.5 rounded-full bg-[#F7941D] animate-pulse" />
-            SandPro Platform
+          <div className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full bg-[var(--brand-10)]/10 border border-[var(--brand-10)]/20 text-[var(--brand-10)] text-[10px] font-bold tracking-[0.2em] uppercase mb-6">
+            <span className="w-1.5 h-1.5 rounded-full bg-[var(--brand-10)] animate-pulse" />
+            SandPro HQ
           </div>
           <h1 className="text-4xl font-black text-white tracking-tighter mb-2">SP OMP</h1>
-          <p className="text-[#8C8CA0] text-sm font-light">Objective Management Platform</p>
+          <p className="text-[var(--accents-7)] text-sm font-light">Where big things happen.</p>
         </div>
 
         {error && (
@@ -64,7 +64,7 @@ export const Login: React.FC = () => {
         <button
           onClick={handleLogin}
           disabled={loading}
-          className="w-full py-4 bg-[#F7941D] hover:bg-[#E8850A] disabled:bg-[#F7941D]/50 text-white font-black rounded-xl transition-all flex items-center justify-center gap-3 shadow-lg shadow-[#F7941D]/20 active:scale-[0.98]"
+          className="accent-button w-full py-4 text-white font-black flex items-center justify-center gap-3 active:scale-[0.98]"
         >
           {loading ? (
             <div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
@@ -82,8 +82,8 @@ export const Login: React.FC = () => {
         </button>
 
         <div className="mt-10 pt-8 border-t border-white/5 text-center">
-          <p className="text-[10px] text-[#555568] uppercase tracking-widest font-bold">
-            Authorized Personnel Only
+          <p className="text-[10px] text-[var(--accents-6)] uppercase tracking-widest font-bold">
+            Authorized Personnel & Dreamers Only
           </p>
         </div>
       </div>
