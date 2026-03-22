@@ -43,6 +43,17 @@ service cloud.firestore {
     //   - createdAt: timestamp (required)
     //   - updatedAt: timestamp (required)
     //
+    // Collection: sources
+    // Document ID: {sourceId}
+    // Fields:
+    //   - name: string (required)
+    //   - type: string (required) - TEXT, FILE
+    //   - content: string (required)
+    //   - url: string (optional)
+    //   - fileType: string (optional)
+    //   - authorId: string (required)
+    //   - createdAt: timestamp (required)
+    //
     // ===============================================================
 
     // ===============================================================
@@ -109,13 +120,24 @@ service cloud.firestore {
     }
 
     function isValidObjective(data) {
-      return hasRequiredFields(['id', 'title', 'groupId', 'assignedToId', 'initiatedById', 'priority', 'status', 'dueDate', 'createdAt', 'updatedAt']) &&
+      return hasRequiredFields(['id', 'title', 'groupId', 'assignedToId', 'initiatedById', 'priority', 'status', 'startDate', 'dueDate', 'createdAt', 'updatedAt']) &&
              data.title is string && data.title.size() > 0 && data.title.size() < 200 &&
+             data.description is string && data.description.size() < 5000 &&
              isValidPriority(data.priority) &&
              isValidStatus(data.status) &&
+             data.startDate is timestamp &&
              data.dueDate is timestamp &&
              data.createdAt is timestamp &&
              data.updatedAt is timestamp;
+    }
+
+    function isValidSource(data) {
+      return hasRequiredFields(['name', 'type', 'content', 'authorId', 'createdAt']) &&
+             data.name is string && data.name.size() > 0 && data.name.size() < 200 &&
+             data.type in ['TEXT', 'FILE'] &&
+             data.content is string && data.content.size() < 100000 &&
+             data.authorId == request.auth.uid &&
+             data.createdAt is timestamp;
     }
 
     // ===============================================================
@@ -186,6 +208,14 @@ service cloud.firestore {
     match /chats/{chatId}/messages/{messageId} {
       allow read: if isAuthenticated();
       allow create: if isAuthenticated() && request.resource.data.senderId == request.auth.uid;
+    }
+
+    // Sources Collection
+    match /sources/{sourceId} {
+      allow read: if isAuthenticated();
+      allow create: if isAuthenticated() && isValidSource(request.resource.data);
+      allow delete: if isAuthenticated() && (resource.data.authorId == request.auth.uid || isAdmin());
+      allow update: if false; // Sources are immutable for now, or just delete and recreate
     }
   }
 }

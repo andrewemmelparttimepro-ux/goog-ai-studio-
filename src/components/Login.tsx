@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
-import { signInWithPopup, GoogleAuthProvider } from 'firebase/auth';
+import { signInWithPopup, GoogleAuthProvider, signInWithEmailAndPassword, createUserWithEmailAndPassword } from 'firebase/auth';
 import { auth, db } from '../firebase';
-import { doc, getDoc, setDoc, serverTimestamp } from 'firebase/firestore';
+import { doc, getDoc, setDoc, serverTimestamp, collection, addDoc, Timestamp } from 'firebase/firestore';
 
 export const Login: React.FC = () => {
   const [loading, setLoading] = useState(false);
@@ -13,29 +13,94 @@ export const Login: React.FC = () => {
     const provider = new GoogleAuthProvider();
     try {
       const result = await signInWithPopup(auth, provider);
-      const user = result.user;
-
-      // Check if user profile exists in Firestore
-      const userRef = doc(db, 'users', user.uid);
-      const userSnap = await getDoc(userRef);
-
-      if (!userSnap.exists()) {
-        // Create initial profile
-        const isAdmin = user.email === 'andrewemmelparttimepro@gmail.com';
-        await setDoc(userRef, {
-          uid: user.uid,
-          email: user.email,
-          displayName: user.displayName,
-          role: isAdmin ? 'ADMIN' : 'CONTRIBUTOR', // Default role
-          createdAt: serverTimestamp(),
-          updatedAt: serverTimestamp(),
-        });
-      }
+      await ensureProfile(result.user);
     } catch (err: any) {
       console.error("Login error:", err);
       setError(err.message || "Failed to sign in with Google.");
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleDemoLogin = async () => {
+    setLoading(true);
+    setError(null);
+    const email = 'kevin@sandpro.com';
+    const pass = 'password123';
+    
+    try {
+      let user;
+      try {
+        const result = await signInWithEmailAndPassword(auth, email, pass);
+        user = result.user;
+      } catch (err: any) {
+        if (err.code === 'auth/user-not-found' || err.code === 'auth/invalid-credential') {
+          const result = await createUserWithEmailAndPassword(auth, email, pass);
+          user = result.user;
+        } else {
+          throw err;
+        }
+      }
+      
+      if (user) {
+        await ensureProfile(user, 'KEVIN MALONE', 'CHIEF FINANCIAL OFFICER');
+      }
+    } catch (err: any) {
+      console.error("Demo login error:", err);
+      setError("Demo login failed. Please use Google sign-in.");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const ensureProfile = async (user: any, displayName?: string, role?: string) => {
+    const userRef = doc(db, 'users', user.uid);
+    const userSnap = await getDoc(userRef);
+
+    if (!userSnap.exists()) {
+      const isAdmin = user.email === 'andrewemmelparttimepro@gmail.com';
+      await setDoc(userRef, {
+        uid: user.uid,
+        email: user.email,
+        displayName: displayName || user.displayName || 'New User',
+        role: role || (isAdmin ? 'ADMIN' : 'CONTRIBUTOR'),
+        createdAt: serverTimestamp(),
+        updatedAt: serverTimestamp(),
+      });
+
+      // Seed initial tasks for Kevin
+      if (displayName === 'KEVIN MALONE') {
+        const objectivesRef = collection(db, 'objectives');
+        const today = new Date();
+        const nextMonth = new Date();
+        nextMonth.setMonth(today.getMonth() + 1);
+        
+        await addDoc(objectivesRef, {
+          title: 'Q1 Financial Audit',
+          description: 'Complete the quarterly financial audit for all departments.',
+          status: 'IN_PROGRESS',
+          priority: 'HIGH',
+          assignedToId: user.uid,
+          percentComplete: 45,
+          startDate: serverTimestamp(),
+          dueDate: Timestamp.fromDate(nextMonth),
+          createdAt: serverTimestamp()
+        });
+
+        const inTwoMonths = new Date();
+        inTwoMonths.setMonth(today.getMonth() + 2);
+        await addDoc(objectivesRef, {
+          title: 'Budget Allocation Review',
+          description: 'Review and approve budget allocations for the manufacturing expansion.',
+          status: 'NOT_STARTED',
+          priority: 'MEDIUM',
+          assignedToId: user.uid,
+          percentComplete: 0,
+          startDate: serverTimestamp(),
+          dueDate: Timestamp.fromDate(inTwoMonths),
+          createdAt: serverTimestamp()
+        });
+      }
     }
   };
 
@@ -64,7 +129,7 @@ export const Login: React.FC = () => {
         <button
           onClick={handleLogin}
           disabled={loading}
-          className="accent-button w-full py-4 text-white font-black flex items-center justify-center gap-3 active:scale-[0.98]"
+          className="accent-button w-full py-4 text-white font-black flex items-center justify-center gap-3 active:scale-[0.98] mb-4"
         >
           {loading ? (
             <div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
@@ -77,6 +142,23 @@ export const Login: React.FC = () => {
                 <path fill="currentColor" d="M12 5.38c1.62 0 3.06.56 4.21 1.66l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 12-4.53z" />
               </svg>
               Sign in with Google
+            </>
+          )}
+        </button>
+
+        <button
+          onClick={handleDemoLogin}
+          disabled={loading}
+          className="secondary-button w-full py-4 text-white font-black flex items-center justify-center gap-3 active:scale-[0.98]"
+        >
+          {loading ? (
+            <div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+          ) : (
+            <>
+              <div className="w-5 h-5 rounded-full bg-[var(--brand-10)]/20 flex items-center justify-center text-[var(--brand-10)]">
+                K
+              </div>
+              Login as Kevin (Demo)
             </>
           )}
         </button>

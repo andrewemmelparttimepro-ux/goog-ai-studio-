@@ -25,6 +25,7 @@ export const ObjectiveForm: React.FC<{ onClose: () => void; initialOwnerId?: str
     groupId: '',
     assignedToId: initialOwnerId || '',
     priority: 'MEDIUM',
+    startDate: new Date().toISOString().split('T')[0],
     dueDate: '',
   });
   const [metrics, setMetrics] = useState([{ 
@@ -72,6 +73,7 @@ export const ObjectiveForm: React.FC<{ onClose: () => void; initialOwnerId?: str
         id: objectiveId,
         status: 'NOT_STARTED',
         initiatedById: user.uid,
+        startDate: new Date(formData.startDate),
         dueDate: new Date(formData.dueDate),
         createdAt: serverTimestamp(),
         updatedAt: serverTimestamp(),
@@ -138,6 +140,16 @@ export const ObjectiveForm: React.FC<{ onClose: () => void; initialOwnerId?: str
                     <option value="HIGH">High</option>
                     <option value="CRITICAL">Critical</option>
                   </select>
+                </div>
+                <div>
+                  <label className="block text-[10px] font-bold text-[var(--accents-6)] uppercase tracking-[0.2em] mb-2">Start Date</label>
+                  <input
+                    required
+                    type="date"
+                    value={formData.startDate}
+                    onChange={e => setFormData({ ...formData, startDate: e.target.value })}
+                    className="modern-input w-full"
+                  />
                 </div>
                 <div>
                   <label className="block text-[10px] font-bold text-[var(--accents-6)] uppercase tracking-[0.2em] mb-2">Due Date</label>

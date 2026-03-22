@@ -1,8 +1,9 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { useAuth } from './FirebaseProvider';
-import { auth, db } from '../firebase';
+import { auth, db, storage, handleFirestoreError, OperationType } from '../firebase';
 import { signOut } from 'firebase/auth';
-import { collection, onSnapshot, query, where, orderBy, Timestamp, getDocs, updateDoc, doc } from 'firebase/firestore';
+import { collection, onSnapshot, query, where, orderBy, Timestamp, getDocs, updateDoc, doc, addDoc, serverTimestamp, deleteDoc } from 'firebase/firestore';
+import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
 import { ObjectiveForm } from './ObjectiveForm';
 import { ObjectiveDetails } from './ObjectiveDetails';
 import { Roadmap } from './Roadmap';
@@ -42,6 +43,15 @@ interface Objective {
 import { generatePortfolioSummary, generateDailyBriefing, DailyBriefing } from '../services/aiService';
 import { motion, AnimatePresence } from 'framer-motion';
 
+interface Source {
+  id: string;
+  name: string;
+  type: string;
+  content: string;
+  url?: string;
+  createdAt?: any;
+}
+
 export const Dashboard: React.FC = () => {
   const { user, profile } = useAuth();
   const [objectives, setObjectives] = useState<Objective[]>([]);
@@ -53,9 +63,11 @@ export const Dashboard: React.FC = () => {
   const [dailyBriefing, setDailyBriefing] = useState<DailyBriefing | null>(null);
   const [isBriefingLoading, setIsBriefingLoading] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
-  const [sources, setSources] = useState<{ id: string; name: string; type: string; content: string }[]>([]);
+  const [sources, setSources] = useState<any[]>([]);
   const [newSourceText, setNewSourceText] = useState('');
   const [showSourceInput, setShowSourceInput] = useState(false);
+  const [isUploading, setIsUploading] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   
   // Section Management
@@ -135,7 +147,7 @@ export const Dashboard: React.FC = () => {
   };
 
   const scrollToRoadmap = () => {
-    goToSection(2);
+    goToSection(1);
   };
 
   useEffect(() => {
@@ -157,7 +169,16 @@ export const Dashboard: React.FC = () => {
       setLoading(false);
     });
 
-    return () => unsubscribe();
+    const unsubSources = onSnapshot(collection(db, 'sources'), (snapshot) => {
+      setSources(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Source)));
+    }, (error) => {
+      handleFirestoreError(error, OperationType.GET, 'sources');
+    });
+
+    return () => {
+      unsubscribe();
+      unsubSources();
+    };
   }, [user]);
 
   const fetchBriefing = async (currentObjectives: Objective[]) => {
@@ -185,21 +206,56 @@ export const Dashboard: React.FC = () => {
     }
   };
 
-  const addSource = () => {
+  const addSource = async () => {
     if (!newSourceText.trim()) return;
-    const newSource = {
-      id: Math.random().toString(36).substr(2, 9),
-      name: newSourceText.length > 20 ? newSourceText.substring(0, 20) + '...' : newSourceText,
-      type: 'TEXT',
-      content: newSourceText
-    };
-    setSources([...sources, newSource]);
-    setNewSourceText('');
-    setShowSourceInput(false);
+    try {
+      await addDoc(collection(db, 'sources'), {
+        name: newSourceText.length > 20 ? newSourceText.substring(0, 20) + '...' : newSourceText,
+        type: 'TEXT',
+        content: newSourceText,
+        createdAt: serverTimestamp(),
+        authorId: user?.uid
+      });
+      setNewSourceText('');
+      setShowSourceInput(false);
+    } catch (error) {
+      handleFirestoreError(error, OperationType.CREATE, 'sources');
+    }
   };
 
-  const removeSource = (id: string) => {
-    setSources(sources.filter(s => s.id !== id));
+  const removeSource = async (id: string) => {
+    try {
+      await deleteDoc(doc(db, 'sources', id));
+    } catch (error) {
+      handleFirestoreError(error, OperationType.DELETE, `sources/${id}`);
+    }
+  };
+
+  const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file || !user) return;
+
+    setIsUploading(true);
+    const storageRef = ref(storage, `knowledge-base/${user.uid}/${Date.now()}_${file.name}`);
+    
+    try {
+      const snapshot = await uploadBytes(storageRef, file);
+      const url = await getDownloadURL(snapshot.ref);
+      
+      await addDoc(collection(db, 'sources'), {
+        name: file.name,
+        type: 'FILE',
+        fileType: file.type,
+        url: url,
+        createdAt: serverTimestamp(),
+        authorId: user.uid,
+        content: `File upload: ${file.name} (${file.type})`
+      });
+    } catch (error) {
+      console.error("Error uploading file:", error);
+    } finally {
+      setIsUploading(false);
+    }
   };
 
   const kpis = {
@@ -297,19 +353,22 @@ export const Dashboard: React.FC = () => {
                     onClick={() => goToSection(1)}
                     className={`sidebar-item w-full ${sectionIndex === 1 ? 'sidebar-item-active' : ''}`}
                   >
-                    <Brain className="w-5 h-5" />
-                    <span>The Brain</span>
+                    <TrendingUp className="w-5 h-5" />
+                    <span>The Game Plan</span>
                   </button>
                   <button 
                     onClick={() => goToSection(2)}
                     className={`sidebar-item w-full ${sectionIndex === 2 ? 'sidebar-item-active' : ''}`}
                   >
-                    <TrendingUp className="w-5 h-5" />
-                    <span>The Game Plan</span>
+                    <Brain className="w-5 h-5" />
+                    <span>The Brain</span>
                   </button>
-                  <button className="sidebar-item w-full opacity-40 cursor-not-allowed">
+                  <button 
+                    onClick={() => goToSection(3)}
+                    className={`sidebar-item w-full ${sectionIndex === 3 ? 'sidebar-item-active' : ''}`}
+                  >
                     <Zap className="w-5 h-5" />
-                    <span>Automations</span>
+                    <span>Knowledge Base</span>
                   </button>
                 </nav>
 
@@ -347,146 +406,147 @@ export const Dashboard: React.FC = () => {
         onTouchEnd={handleTouchEnd}
         className="flex-1 overflow-hidden relative perspective-2000"
       >
-        <AnimatePresence initial={false} custom={direction}>
+        <AnimatePresence initial={false} custom={direction} mode="popLayout">
           <motion.div
             key={sectionIndex}
             custom={direction}
             variants={{
               enter: (direction: number) => ({
-                y: direction > 0 ? 120 : -120,
+                rotateY: direction > 0 ? 180 : -180,
                 opacity: 0,
-                scale: 0.9,
-                filter: 'blur(16px)'
+                scale: 0.95
               }),
               center: {
-                y: 0,
+                rotateY: 0,
                 opacity: 1,
                 scale: 1,
-                filter: 'blur(0px)',
                 transition: {
-                  duration: 1.2,
-                  ease: [0.22, 1, 0.36, 1]
+                  duration: 0.7,
+                  ease: [0.23, 1, 0.32, 1]
                 }
               },
               exit: (direction: number) => ({
-                y: direction > 0 ? -120 : 120,
+                rotateY: direction > 0 ? -180 : 180,
                 opacity: 0,
-                scale: 0.9,
-                filter: 'blur(16px)',
+                scale: 0.95,
                 transition: {
-                  duration: 1.2,
-                  ease: [0.22, 1, 0.36, 1]
+                  duration: 0.7,
+                  ease: [0.23, 1, 0.32, 1]
                 }
               })
             }}
             initial="enter"
             animate="center"
             exit="exit"
-            className="h-full w-full absolute inset-0"
-            style={{ backfaceVisibility: 'hidden', transformStyle: 'preserve-3d' }}
+            className="h-full w-full absolute inset-0 bg-[var(--accents-1)] overflow-hidden"
+            style={{ 
+              backfaceVisibility: 'hidden', 
+              transformStyle: 'preserve-3d',
+              zIndex: isTransitioning ? 10 : 1
+            }}
           >
             {sectionIndex === 0 && (
-              <section className="h-full flex flex-col px-6 md:px-16 lg:px-24 py-6 md:py-12 overflow-y-auto custom-scrollbar">
-          <header className="flex-1 flex flex-col justify-center min-h-min py-8 md:py-0">
-              <div className="flex-1 flex flex-col lg:flex-row items-stretch gap-8 md:gap-12">
+              <section className="h-full flex flex-col px-6 md:px-16 lg:px-24 py-6 md:py-12 overflow-hidden">
+          <header className="flex-1 flex flex-col justify-center min-h-0 py-4 md:py-0">
+              <div className="flex-1 flex flex-col lg:flex-row items-stretch gap-8 md:gap-12 min-h-0">
                 {/* Left: Strategic Briefing */}
-                <div className="flex-1 flex flex-col justify-center">
+                <div className="flex-1 flex flex-col justify-center min-h-0">
                   <motion.p 
                     initial={{ opacity: 0, y: 10 }}
                     animate={{ opacity: 1, y: 0 }}
-                    className="text-[var(--brand-10)] font-black text-xs uppercase tracking-[0.5em] mb-8"
+                    className="text-[var(--brand-10)] font-black text-[10px] md:text-xs uppercase tracking-[0.5em] mb-4 md:mb-8 shrink-0"
                   >
                     The Morning Report • {new Date().toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' })}
                   </motion.p>
                   
-                  <AnimatePresence mode="wait">
-                    {isBriefingLoading ? (
-                      <motion.div 
-                        key="loading"
-                        initial={{ opacity: 0 }}
-                        animate={{ opacity: 1 }}
-                        exit={{ opacity: 0 }}
-                        className="flex items-center gap-4 text-[var(--accents-6)]"
-                      >
-                        <RefreshCw className="w-6 h-6 animate-spin" />
-                        <span className="text-sm font-black uppercase tracking-[0.3em]">Synthesizing Daily Strategic Briefing...</span>
-                      </motion.div>
-                    ) : dailyBriefing ? (
-                      <motion.div 
-                        key="briefing"
-                        initial={{ opacity: 0, y: 30 }}
-                        animate={{ opacity: 1, y: 0 }}
-                        transition={{ type: "spring", damping: 20 }}
-                        className="space-y-12"
-                      >
-                        <div className="relative">
-                          <h1 className="pitch-header">
-                            {dailyBriefing.headline}
-                          </h1>
-                          <div className="flex flex-col md:flex-row gap-12 items-start mt-8">
-                            <p className="text-xl md:text-2xl text-[var(--accents-9)] font-light leading-[1.2] max-w-2xl tracking-tight">
-                              {dailyBriefing.summary}
-                            </p>
-                            
-                            <div className="flex flex-col gap-8 border-l border-white/10 pl-12">
-                              <div className="space-y-2">
-                                <span className="text-[10px] font-black uppercase tracking-[0.3em] text-[var(--brand-10)]">Priority Focus</span>
-                                <p className="text-base text-white font-medium leading-snug max-w-xs">
-                                  {dailyBriefing.priorityFocus}
-                                </p>
-                              </div>
-                              <div className="space-y-2">
-                                <span className="text-[10px] font-black uppercase tracking-[0.3em] text-[var(--accents-6)]">Strategic Insight</span>
-                                <p className="text-base text-[var(--accents-6)] font-medium leading-snug max-w-xs">
-                                  {dailyBriefing.newsInsight}
-                                </p>
+                  <div className="flex-1 overflow-y-auto custom-scrollbar pr-4 min-h-0 max-h-[45vh] md:max-h-none">
+                    <AnimatePresence mode="wait">
+                      {isBriefingLoading ? (
+                        <motion.div 
+                          key="loading"
+                          initial={{ opacity: 0 }}
+                          animate={{ opacity: 1 }}
+                          exit={{ opacity: 0 }}
+                          className="flex items-center gap-4 text-[var(--accents-6)]"
+                        >
+                          <RefreshCw className="w-6 h-6 animate-spin" />
+                          <span className="text-sm font-black uppercase tracking-[0.3em]">Synthesizing Daily Strategic Briefing...</span>
+                        </motion.div>
+                      ) : dailyBriefing ? (
+                        <motion.div 
+                          key="briefing"
+                          initial={{ opacity: 0, y: 30 }}
+                          animate={{ opacity: 1, y: 0 }}
+                          transition={{ type: "spring", damping: 20 }}
+                          className="space-y-8 md:space-y-12"
+                        >
+                          <div className="relative">
+                            <h1 className="pitch-header text-4xl md:text-6xl lg:text-8xl">
+                              {dailyBriefing.headline}
+                            </h1>
+                            <div className="flex flex-col md:flex-row gap-8 md:gap-12 items-start mt-6 md:mt-8">
+                              <p className="text-lg md:text-2xl text-[var(--accents-9)] font-light leading-[1.2] max-w-2xl tracking-tight">
+                                {dailyBriefing.summary}
+                              </p>
+                              
+                              <div className="flex flex-col gap-6 md:gap-8 border-l border-white/10 pl-8 md:pl-12">
+                                <div className="space-y-2">
+                                  <span className="text-[10px] font-black uppercase tracking-[0.3em] text-[var(--brand-10)]">Priority Focus</span>
+                                  <p className="text-sm md:text-base text-white font-medium leading-snug max-w-xs">
+                                    {dailyBriefing.priorityFocus}
+                                  </p>
+                                </div>
+                                <div className="space-y-2">
+                                  <span className="text-[10px] font-black uppercase tracking-[0.3em] text-[var(--accents-6)]">Strategic Insight</span>
+                                  <p className="text-sm md:text-base text-[var(--accents-6)] font-medium leading-snug max-w-xs">
+                                    {dailyBriefing.newsInsight}
+                                  </p>
+                                </div>
                               </div>
                             </div>
                           </div>
-                        </div>
-                      </motion.div>
-                    ) : (
-                      <motion.h1 
-                        key="default"
-                        initial={{ opacity: 0, y: 20 }}
-                        animate={{ opacity: 1, y: 0 }}
-                        className="pitch-header"
-                      >
-                        Strategic <br />
-                        <span className="text-[var(--accents-6)]">Intelligence</span>
-                      </motion.h1>
-                    )}
-                  </AnimatePresence>
+                        </motion.div>
+                      ) : (
+                        <motion.h1 
+                          key="default"
+                          initial={{ opacity: 0, y: 20 }}
+                          animate={{ opacity: 1, y: 0 }}
+                          className="pitch-header text-4xl md:text-6xl lg:text-8xl"
+                        >
+                          Strategic <br />
+                          <span className="text-[var(--accents-6)]">Intelligence</span>
+                        </motion.h1>
+                      )}
+                    </AnimatePresence>
+                  </div>
                 </div>
 
                 {/* Right: Vertical Action Pillars */}
-                <div className="flex flex-col gap-4 md:gap-6 w-full lg:w-[450px]">
+                <div className="flex flex-col gap-4 md:gap-6 w-full lg:w-[450px] shrink-0">
                   
-                  {canCreate && (
-                    <motion.button
-                      initial={{ opacity: 0, x: 20 }}
-                      animate={{ opacity: 1, x: 0 }}
-                      whileHover={{ scale: 1.02, y: -5 }}
-                      whileTap={{ scale: 0.98 }}
-                      onClick={() => setShowForm(true)}
-                      className="flex-1 min-h-[200px] group relative flex flex-col items-center justify-center gap-4 md:gap-8 bg-gradient-to-br from-[var(--brand-10)]/20 via-[var(--brand-10)]/5 to-transparent border border-[var(--brand-10)]/30 rounded-[2rem] md:rounded-[4rem] overflow-hidden transition-all duration-500 shadow-[0_40px_100px_rgba(247,148,29,0.15)]"
-                    >
-                      <div className="absolute inset-0 bg-[radial-gradient(circle_at_50%_0%,rgba(247,148,29,0.2),transparent_70%)] opacity-0 group-hover:opacity-100 transition-opacity duration-700" />
-                      <div className="relative">
-                        <div className="absolute inset-0 bg-[var(--brand-10)] blur-2xl opacity-20 group-hover:opacity-40 transition-opacity" />
-                        <div className="icon-container !bg-[var(--brand-10)] !w-16 !h-16 md:!w-28 md:!h-28 !shadow-[0_0_80px_rgba(247,148,29,0.5)] group-hover:scale-110 transition-transform duration-700 relative z-10">
-                          <Plus className="w-8 h-8 md:w-14 md:h-14 stroke-[3] text-white drop-shadow-lg" />
-                        </div>
+                  <motion.button
+                    initial={{ opacity: 0, x: 20 }}
+                    animate={{ opacity: 1, x: 0 }}
+                    whileHover={{ scale: 1.02, y: -5 }}
+                    whileTap={{ scale: 0.98 }}
+                    onClick={() => setShowForm(true)}
+                    className="flex-1 min-h-[140px] md:min-h-[200px] group relative flex flex-col items-center justify-center gap-3 md:gap-8 bg-gradient-to-br from-[var(--brand-10)]/20 via-[var(--brand-10)]/5 to-transparent border border-[var(--brand-10)]/30 rounded-[2rem] md:rounded-[4rem] overflow-hidden transition-all duration-500 shadow-[0_40px_100px_rgba(247,148,29,0.15)]"
+                  >
+                    <div className="absolute inset-0 bg-[radial-gradient(circle_at_50%_0%,rgba(247,148,29,0.2),transparent_70%)] opacity-0 group-hover:opacity-100 transition-opacity duration-700" />
+                    <div className="relative">
+                      <div className="absolute inset-0 bg-[var(--brand-10)] blur-2xl opacity-20 group-hover:opacity-40 transition-opacity" />
+                      <div className="icon-container !bg-[var(--brand-10)] !w-12 !h-12 md:!w-28 md:!h-28 !shadow-[0_0_80px_rgba(247,148,29,0.5)] group-hover:scale-110 transition-transform duration-700 relative z-10">
+                        <Plus className="w-6 h-6 md:w-14 md:h-14 stroke-[3] text-white drop-shadow-lg" />
                       </div>
-                      <div className="text-center px-6 md:px-10 relative z-10">
-                        <span className="text-2xl md:text-4xl font-black text-white uppercase tracking-tighter block mb-2 group-hover:tracking-tight transition-all">New Objective</span>
-                        <div className="flex items-center justify-center gap-2">
-                          <div className="w-1.5 h-1.5 rounded-full bg-[var(--brand-10)] animate-pulse" />
-                          <p className="text-[9px] md:text-[11px] font-black text-[var(--brand-10)] uppercase tracking-[0.4em] opacity-80">Let's get started</p>
-                        </div>
+                    </div>
+                    <div className="text-center px-6 md:px-10 relative z-10">
+                      <span className="text-xl md:text-4xl font-black text-white uppercase tracking-tighter block mb-1 md:mb-2 group-hover:tracking-tight transition-all">New Objective</span>
+                      <div className="flex items-center justify-center gap-2">
+                        <div className="w-1.5 h-1.5 rounded-full bg-[var(--brand-10)] animate-pulse" />
+                        <p className="text-[8px] md:text-[11px] font-black text-[var(--brand-10)] uppercase tracking-[0.4em] opacity-80">Let's get started</p>
                       </div>
-                    </motion.button>
-                  )}
+                    </div>
+                  </motion.button>
 
                   <motion.button
                     initial={{ opacity: 0, x: 20 }}
@@ -495,56 +555,45 @@ export const Dashboard: React.FC = () => {
                     whileHover={{ scale: 1.02, y: -5 }}
                     whileTap={{ scale: 0.98 }}
                     onClick={scrollToRoadmap}
-                    className="flex-1 min-h-[200px] group relative flex flex-col items-center justify-center gap-4 md:gap-8 bg-gradient-to-br from-indigo-500/20 via-indigo-500/5 to-transparent border border-indigo-500/30 rounded-[2rem] md:rounded-[4rem] overflow-hidden transition-all duration-500 shadow-[0_40px_100px_rgba(99,102,241,0.15)]"
+                    className="flex-1 min-h-[140px] md:min-h-[200px] group relative flex flex-col items-center justify-center gap-3 md:gap-8 bg-gradient-to-br from-indigo-500/20 via-indigo-500/5 to-transparent border border-indigo-500/30 rounded-[2rem] md:rounded-[4rem] overflow-hidden transition-all duration-500 shadow-[0_40px_100px_rgba(99,102,241,0.15)]"
                   >
                     <div className="absolute inset-0 bg-[radial-gradient(circle_at_50%_0%,rgba(99,102,241,0.2),transparent_70%)] opacity-0 group-hover:opacity-100 transition-opacity duration-700" />
                     <div className="relative">
                       <div className="absolute inset-0 bg-indigo-500 blur-2xl opacity-20 group-hover:opacity-40 transition-opacity" />
-                      <div className="icon-container !bg-indigo-500 !w-16 !h-16 md:!w-28 md:!h-28 !shadow-[0_0_80px_rgba(99,102,241,0.5)] group-hover:scale-110 transition-transform duration-700 relative z-10">
-                        <TrendingUp className="w-8 h-8 md:w-14 md:h-14 stroke-[3] text-white drop-shadow-lg" />
+                      <div className="icon-container !bg-indigo-500 !w-12 !h-12 md:!w-28 md:!h-28 !shadow-[0_0_80px_rgba(99,102,241,0.5)] group-hover:scale-110 transition-transform duration-700 relative z-10">
+                        <div className="w-6 h-6 md:w-14 md:h-14 flex items-center justify-center">
+                          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" className="w-full h-full text-white drop-shadow-lg">
+                            <path d="M22 12h-4l-3 9L9 3l-3 9H2" />
+                          </svg>
+                        </div>
                       </div>
                     </div>
                     <div className="text-center px-6 md:px-10 relative z-10">
-                      <span className="text-2xl md:text-4xl font-black text-white uppercase tracking-tighter block mb-2 group-hover:tracking-tight transition-all">Current Roadmap</span>
+                      <span className="text-xl md:text-4xl font-black text-white uppercase tracking-tighter block mb-1 md:mb-2 group-hover:tracking-tight transition-all">Current Roadmap</span>
                       <div className="flex items-center justify-center gap-2">
                         <div className="w-1.5 h-1.5 rounded-full bg-indigo-400 animate-pulse" />
-                        <p className="text-[9px] md:text-[11px] font-black text-indigo-400 uppercase tracking-[0.4em] opacity-80">Where we're headed</p>
+                        <p className="text-[8px] md:text-[11px] font-black text-indigo-400 uppercase tracking-[0.4em] opacity-80">Where we're headed</p>
                       </div>
                     </div>
                   </motion.button>
                 </div>
               </div>
           </header>
-          
-          <motion.div 
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            transition={{ delay: 1.5 }}
-            className="absolute bottom-10 left-0 right-0 px-16 md:px-24 pointer-events-none"
-          >
-            <div className="flex flex-col lg:flex-row items-stretch gap-12">
-              <div className="flex-1">
-                <div className="flex flex-col md:flex-row gap-12 items-start">
-                  {/* Spacer to align with the briefing summary line above */}
-                  <div className="max-w-2xl w-full hidden md:block" />
-                  <div className="hidden md:flex flex-col items-center gap-3 md:-translate-x-1/2 w-full md:w-auto">
-                    <span className="text-[9px] font-black uppercase tracking-[0.4em] text-center whitespace-nowrap">Keep going • Scroll to proceed</span>
-                    <div className="w-px h-16 bg-gradient-to-b from-[var(--brand-10)] via-[var(--brand-10)]/50 to-transparent shadow-[0_0_10px_rgba(247,148,29,0.2)]" />
-                  </div>
-                </div>
-              </div>
-              <div className="w-full lg:w-[450px] hidden lg:block" />
-            </div>
-          </motion.div>
         </section>
             )}
 
             {sectionIndex === 1 && (
+              <section className="h-full flex flex-col bg-[var(--accents-1)] overflow-hidden">
+                <Roadmap />
+              </section>
+            )}
+
+            {sectionIndex === 2 && (
               <section className="h-full flex flex-col px-6 md:px-16 lg:px-24 bg-[var(--accents-1)] py-6 md:py-16 overflow-y-auto custom-scrollbar">
           {/* Top Widgets Grid */}
-          <div className="grid grid-cols-1 xl:grid-cols-4 gap-4 md:gap-8 flex-1">
+          <div className="grid grid-cols-1 gap-4 md:gap-8 flex-1">
           {/* Sources & AI Insights Widget */}
-          <section className="modern-card p-6 md:p-10 xl:col-span-3 flex flex-col min-h-[500px]">
+          <section className="modern-card p-6 md:p-10 flex flex-col min-h-[500px]">
             <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 md:gap-6 mb-6 md:mb-12">
               <div className="flex items-center gap-4 md:gap-6">
                 <div className="w-10 h-10 md:w-14 md:h-14 bg-[var(--brand-10)]/10 rounded-xl md:rounded-[1.5rem] flex items-center justify-center shrink-0">
@@ -561,8 +610,22 @@ export const Dashboard: React.FC = () => {
                   className="secondary-button flex items-center gap-2 md:gap-3 !px-3 md:!px-6 !py-2 md:!py-3 !text-[10px] md:!text-xs"
                 >
                   <Plus className="w-3 h-3 md:w-4 md:h-4" />
-                  <span>Add Source</span>
+                  <span>Add Note</span>
                 </button>
+                <button 
+                  onClick={() => fileInputRef.current?.click()}
+                  disabled={isUploading}
+                  className="secondary-button flex items-center gap-2 md:gap-3 !px-3 md:!px-6 !py-2 md:!py-3 !text-[10px] md:!text-xs disabled:opacity-50"
+                >
+                  {isUploading ? <RefreshCw className="w-3 h-3 md:w-4 md:h-4 animate-spin" /> : <Plus className="w-3 h-3 md:w-4 md:h-4" />}
+                  <span>{isUploading ? 'Uploading...' : 'Upload File'}</span>
+                </button>
+                <input 
+                  type="file" 
+                  ref={fileInputRef} 
+                  onChange={handleFileUpload} 
+                  className="hidden" 
+                />
                 <button 
                   onClick={runPortfolioSummary}
                   disabled={isSummarizing || (objectives.length === 0 && sources.length === 0)}
@@ -655,68 +718,13 @@ export const Dashboard: React.FC = () => {
               </div>
             </div>
           </section>
-
-          {/* KPI Summary Widget */}
-          <section className="modern-card p-6 md:p-10 flex flex-col">
-            <div className="flex items-center justify-between mb-6 md:mb-12">
-              <h3 className="text-xs md:text-sm font-black text-white uppercase tracking-[0.2em]">How we're doing</h3>
-              <div className="w-2 h-2 rounded-full bg-[var(--success-9)] animate-pulse" />
-            </div>
-            
-            <div className="grid grid-cols-1 gap-4 md:gap-6 flex-1">
-              {[
-                { label: "Active", value: kpis.open, color: "text-[var(--brand-10)]", bg: "bg-[var(--brand-10)]/5" },
-                { label: "Overdue", value: kpis.overdue, color: "text-[var(--error-9)]", bg: "bg-[var(--error-9)]/5" },
-                { label: "Due Soon", value: kpis.dueSoon, color: "text-[var(--warning-9)]", bg: "bg-[var(--warning-9)]/5" },
-                { label: "Completed", value: kpis.completed, color: "text-[var(--success-9)]", bg: "bg-[var(--success-9)]/5" }
-              ].map((kpi, i) => (
-                <div key={i} className={`${kpi.bg} border border-white/5 rounded-2xl md:rounded-3xl p-4 md:p-6 flex items-center justify-between group hover:border-white/10 transition-all`}>
-                  <div>
-                    <div className="text-[8px] md:text-[10px] font-black tracking-[0.2em] text-[var(--accents-6)] uppercase mb-1">{kpi.label}</div>
-                    <div className={`text-3xl md:text-4xl font-black ${kpi.color} tracking-tighter`}>{kpi.value}</div>
-                  </div>
-                  <ChevronRight className="w-4 h-4 md:w-5 md:h-5 text-[var(--accents-4)] group-hover:text-white transition-all" />
-                </div>
-              ))}
-            </div>
-          </section>
         </div>
       </section>
-            )}
-
-            {sectionIndex === 2 && (
-              <section className="h-full flex flex-col bg-[var(--accents-1)] overflow-hidden">
-                <Roadmap />
-              </section>
             )}
           </motion.div>
         </AnimatePresence>
 
-        {/* Scanline overlay for "switch" feel */}
-        {(isTransitioning || glitchActive) && (
-          <div className="fixed inset-0 z-[200] pointer-events-none overflow-hidden">
-            <motion.div 
-              initial={{ opacity: 0 }}
-              animate={{ opacity: [0, 1, 0.5, 1, 0] }}
-              transition={{ duration: 0.5 }}
-              className="absolute inset-0 bg-[var(--brand-10)]/5 backdrop-blur-[2px]"
-            />
-            <div className="absolute inset-0 bg-[linear-gradient(rgba(18,16,16,0)_50%,rgba(0,0,0,0.1)_50%),linear-gradient(90deg,rgba(255,0,0,0.03),rgba(0,255,0,0.01),rgba(0,0,255,0.03))] bg-[length:100%_2px,3px_100%]" />
-            <div className="w-full h-1 bg-[var(--brand-10)] shadow-[0_0_30px_var(--brand-10)] animate-scanline absolute top-0" />
-            <div className="w-full h-px bg-[var(--brand-10)]/20 absolute top-1/4" />
-            <div className="w-full h-px bg-[var(--brand-10)]/20 absolute top-3/4" />
-            
-            {/* Technical readout flicker */}
-            <div className="absolute top-10 right-10 font-mono text-[8px] text-[var(--brand-10)] opacity-60 flex flex-col items-end gap-1">
-              <div className="flex items-center gap-2">
-                <span className="w-1 h-1 rounded-full bg-[var(--brand-10)] animate-pulse" />
-                SESSION_ID: {Math.random().toString(36).substr(2, 9).toUpperCase()}
-              </div>
-              <div>SYNC_STATUS: ACTIVE</div>
-              <div>RE-CALIBRATING: {Math.floor(Math.random() * 100)}%</div>
-            </div>
-          </div>
-        )}
+        {/* Transition overlay removed as per request */}
       </main>
 
 

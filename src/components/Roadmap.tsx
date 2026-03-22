@@ -3,8 +3,9 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { User, Calendar, Flag, CheckCircle2, Clock, MessageSquare, Send, Zap, FileText, Paperclip, Plus, Search, Brain, X, RefreshCw, ChevronRight } from 'lucide-react';
 import { ObjectiveForm } from './ObjectiveForm';
 import { generateEmbedding } from '../services/embeddingService';
-import { db, auth, handleFirestoreError, OperationType } from '../firebase';
-import { collection, query, orderBy, onSnapshot, addDoc, serverTimestamp } from 'firebase/firestore';
+import { db, auth, storage, handleFirestoreError, OperationType } from '../firebase';
+import { collection, query, orderBy, onSnapshot, addDoc, serverTimestamp, Timestamp } from 'firebase/firestore';
+import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
 import { useAuth } from './FirebaseProvider';
 
 interface TaskNote {
@@ -30,6 +31,7 @@ interface RoadmapTask {
   status: 'COMPLETED' | 'IN_PROGRESS' | 'PENDING';
   priority?: 'HIGH' | 'MEDIUM' | 'LOW';
   description?: string;
+  percentComplete?: number;
   notes?: TaskNote[];
   files?: TaskFile[];
 }
@@ -46,108 +48,6 @@ interface PersonRoadmap {
   files?: TaskFile[];
 }
 
-const MOCK_ROADMAP: PersonRoadmap[] = [
-  {
-    id: '1',
-    name: 'JOSH',
-    role: 'Lead Architect',
-    avatar: 'https://picsum.photos/seed/josh/100/100',
-    color: 'bg-indigo-600',
-    isActive: true,
-    tasks: [
-      { 
-        id: 't1', 
-        title: 'Core Infrastructure Audit', 
-        startDate: '2026-03-01', 
-        endDate: '2026-03-15', 
-        status: 'COMPLETED', 
-        priority: 'HIGH',
-        description: 'Comprehensive review of the primary cloud infrastructure and security protocols.',
-        notes: [
-          { id: 'n1', text: 'Initial scan shows 98% compliance with security standards.', timestamp: '2026-03-02T10:00:00Z', embedding: [0.1, 0.2, 0.3] },
-          { id: 'n2', text: 'Identified minor latency issues in the US-East region.', timestamp: '2026-03-05T14:30:00Z', embedding: [0.4, 0.5, 0.6] }
-        ],
-        files: [
-          { id: 'f1', name: 'Audit_Report_V1.pdf', type: 'PDF', size: '2.4 MB', url: '#' },
-          { id: 'f2', name: 'Security_Scan_Results.xlsx', type: 'XLSX', size: '1.1 MB', url: '#' }
-        ]
-      },
-      { id: 't2', title: 'Database Migration Strategy', startDate: '2026-03-16', endDate: '2026-04-05', status: 'IN_PROGRESS', priority: 'HIGH' },
-    ]
-  },
-  {
-    id: '2',
-    name: 'KELBY',
-    role: 'Product Strategy',
-    avatar: 'https://picsum.photos/seed/kelby/100/100',
-    color: 'bg-indigo-500',
-    isActive: false,
-    tasks: [
-      { id: 't4', title: 'Market Analysis Q2', startDate: '2026-03-05', endDate: '2026-03-20', status: 'COMPLETED', priority: 'MEDIUM' },
-      { id: 't5', title: 'Product Roadmap Alignment', startDate: '2026-03-22', endDate: '2026-04-15', status: 'IN_PROGRESS', priority: 'HIGH' },
-    ]
-  },
-  {
-    id: '3',
-    name: 'DREW',
-    role: 'UX Director',
-    avatar: 'https://picsum.photos/seed/drew/100/100',
-    color: 'bg-indigo-400',
-    isActive: true,
-    tasks: [
-      { id: 't7', title: 'Design System V2', startDate: '2026-03-10', endDate: '2026-04-01', status: 'IN_PROGRESS', priority: 'HIGH' },
-    ]
-  },
-  {
-    id: '4',
-    name: 'KAYLA',
-    role: 'Frontend Lead',
-    avatar: 'https://picsum.photos/seed/kayla/100/100',
-    color: 'bg-emerald-500',
-    isActive: false,
-    tasks: [
-      { id: 't8', title: 'Component Library Refactor', startDate: '2026-03-15', endDate: '2026-04-10', status: 'IN_PROGRESS', priority: 'MEDIUM' },
-    ]
-  },
-  {
-    id: '5',
-    name: 'MALCOMB',
-    role: 'Backend Engineer',
-    avatar: 'https://picsum.photos/seed/malcomb/100/100',
-    color: 'bg-indigo-300',
-    isActive: false,
-    tasks: [
-      { id: 't9', title: 'API Documentation', startDate: '2026-03-20', endDate: '2026-04-05', status: 'PENDING', priority: 'LOW' },
-    ]
-  },
-  {
-    id: '6',
-    name: 'KEVIN',
-    role: 'Product Manager',
-    avatar: 'https://picsum.photos/seed/kevin/100/100',
-    color: 'bg-indigo-400',
-    isActive: false,
-    tasks: [
-      { id: 't10', title: 'User Feedback Analysis', startDate: '2026-03-25', endDate: '2026-04-10', status: 'PENDING', priority: 'MEDIUM' }
-    ]
-  },
-  {
-    id: '7',
-    name: 'ANDREW',
-    role: 'Operations Lead',
-    avatar: 'https://picsum.photos/seed/andrew/100/100',
-    color: 'bg-emerald-400',
-    isActive: true,
-    tasks: [
-      { id: 't11', title: 'Vendor Contracts Review', startDate: '2026-03-18', endDate: '2026-03-30', status: 'IN_PROGRESS', priority: 'HIGH' }
-    ]
-  }
-];
-
-const HIGH_PRIORITY_TASKS = MOCK_ROADMAP.flatMap(p => 
-  p.tasks.filter(t => t.priority === 'HIGH').map(t => ({ ...t, owner: p.name }))
-);
-
 const calculatePosition = (date: string) => {
   const d = new Date(date);
   const start = new Date('2026-03-01');
@@ -161,7 +61,150 @@ type CardState =
   | { type: 'TASK', task: RoadmapTask, owner: string, ownerId: string }
   | { type: 'PERSON', person: PersonRoadmap };
 
+const TaskStack: React.FC<{
+  tasks: RoadmapTask[];
+  person: PersonRoadmap;
+  calculatePosition: (date: string) => number;
+  setActiveCard: (card: CardState | null) => void;
+  getTaskPriority: (t: RoadmapTask) => number;
+  isFirstRow: boolean;
+}> = ({ tasks, person, calculatePosition, setActiveCard, getTaskPriority, isFirstRow }) => {
+  const [activeIndex, setActiveIndex] = useState(0);
+  const [isHovered, setIsHovered] = useState(false);
+  const containerRef = useRef<HTMLDivElement>(null);
+
+  const sortedTasks = [...tasks].sort((a, b) => getTaskPriority(b) - getTaskPriority(a));
+
+  const handleWheel = (e: React.WheelEvent) => {
+    if (!isHovered || sortedTasks.length <= 1) return;
+    e.preventDefault();
+    if (e.deltaY > 0) {
+      setActiveIndex(prev => (prev + 1) % sortedTasks.length);
+    } else {
+      setActiveIndex(prev => (prev - 1 + sortedTasks.length) % sortedTasks.length);
+    }
+  };
+
+  const getStatusColor = (t: RoadmapTask, isTop: boolean) => {
+    if (t.status === 'COMPLETED') return isTop ? 'bg-emerald-600 border-emerald-400 text-white' : 'bg-emerald-500/20 border-emerald-500/40 text-emerald-400';
+    const todayDate = new Date('2026-03-20');
+    const dueDate = new Date(t.endDate);
+    const diffDays = Math.ceil((dueDate.getTime() - todayDate.getTime()) / (1000 * 60 * 60 * 24));
+    if (diffDays < 0) return isTop ? 'bg-rose-600 border-rose-400 text-white' : 'bg-rose-500/20 border-rose-500/40 text-rose-400';
+    if (diffDays <= 3) return isTop ? 'bg-amber-500 border-amber-400 text-black' : 'bg-amber-500/20 border-amber-500/40 text-amber-400';
+    return isTop ? 'bg-emerald-600 border-emerald-400 text-white' : 'bg-emerald-500/20 border-emerald-500/40 text-emerald-400';
+  };
+
+  // The stack position is based on the earliest start and latest end of the group
+  const earliestStart = sortedTasks.reduce((min, t) => new Date(t.startDate) < new Date(min) ? t.startDate : min, sortedTasks[0].startDate);
+  const latestEnd = sortedTasks.reduce((max, t) => new Date(t.endDate) > new Date(max) ? t.endDate : max, sortedTasks[0].endDate);
+  
+  const left = calculatePosition(earliestStart);
+  const width = calculatePosition(latestEnd) - left;
+
+  return (
+    <div 
+      ref={containerRef}
+      onWheel={handleWheel}
+      onMouseEnter={() => setIsHovered(true)}
+      onMouseLeave={() => { setIsHovered(false); setActiveIndex(0); }}
+      className="absolute h-12 flex items-center transition-all duration-500"
+      style={{ 
+        left: `${left}%`, 
+        width: `${Math.max(width, 15)}%`,
+        zIndex: isHovered ? 50 : 10
+      }}
+    >
+      <div className="relative w-full h-full flex items-center justify-center">
+        {sortedTasks.map((task, i) => {
+          const isTop = i === activeIndex;
+          const offset = isHovered ? 0 : (i - activeIndex) * 4;
+          const scale = isHovered ? (isTop ? 1.1 : 0.95) : (1 - Math.abs(i - activeIndex) * 0.05);
+          const opacity = isHovered ? (isTop ? 1 : 0.4) : (1 - Math.abs(i - activeIndex) * 0.3);
+          
+          // Re-calculate individual task position within the stack if needed, 
+          // but for macOS style "stack", they usually share a base position when stacked.
+          // We'll use the stack's left/width but allow individual tasks to show their range if expanded?
+          // Actually, macOS stacks on the dock are at one point. 
+          // On the timeline, we'll keep them at the stack's bounds for a clean look.
+
+          return (
+            <motion.div
+              key={task.id}
+              initial={false}
+              animate={{ 
+                y: offset,
+                x: isHovered ? (i - activeIndex) * 10 : 0,
+                scale,
+                opacity: opacity > 0 ? opacity : 0,
+                zIndex: isTop ? 100 : 50 - i
+              }}
+              onClick={(e) => {
+                e.stopPropagation();
+                setActiveCard({ type: 'TASK', task, owner: person.name, ownerId: person.id });
+              }}
+              className={`
+                absolute inset-0 h-10 rounded-xl border flex items-center px-4 gap-3 cursor-pointer transition-all shadow-2xl
+                ${getStatusColor(task, isTop)}
+                ${isTop ? 'brightness-110 ring-2 ring-white/20' : 'brightness-75'}
+              `}
+            >
+              <div className="w-5 h-5 rounded-lg bg-white/10 flex items-center justify-center flex-shrink-0">
+                {task.status === 'COMPLETED' ? <CheckCircle2 className="w-3 h-3" /> : <Clock className="w-3 h-3" />}
+              </div>
+              <div className="flex flex-col min-w-0">
+                <span className="text-[9px] font-black uppercase tracking-tight truncate">{task.title}</span>
+                <span className="text-[7px] opacity-40 font-mono uppercase truncate">{task.startDate} - {task.endDate}</span>
+              </div>
+
+              {/* Hover Summary Pop-up (Only for top item) */}
+              {isTop && isHovered && (
+                <motion.div 
+                  initial={{ opacity: 0, y: isFirstRow ? -10 : 10 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  className={`absolute ${isFirstRow ? 'top-full mt-4' : 'bottom-full mb-4'} left-1/2 -translate-x-1/2 w-64 p-4 bg-black/95 border border-white/10 rounded-2xl pointer-events-none z-[200] shadow-2xl backdrop-blur-xl`}
+                >
+                  <div className="flex items-center justify-between mb-2">
+                    <div className="text-[10px] font-black uppercase text-white tracking-widest">{task.title}</div>
+                    <div className={`text-[8px] font-mono px-1.5 py-0.5 rounded-sm ${
+                      task.priority === 'CRITICAL' ? 'bg-rose-500 text-white' : 
+                      task.priority === 'HIGH' ? 'bg-amber-500 text-black' : 'bg-white/10 text-white/60'
+                    }`}>
+                      {task.priority}
+                    </div>
+                  </div>
+                  <div className="text-[9px] text-white/50 leading-relaxed mb-3 line-clamp-2">
+                    {task.description || 'Strategic objective in progress. Tap for full brief and collaboration.'}
+                  </div>
+                  <div className="flex items-center justify-between pt-2 border-t border-white/5">
+                    <div className="flex flex-col">
+                      <span className="text-[7px] text-white/30 uppercase font-bold">Progress</span>
+                      <span className="text-[9px] text-white font-mono">{task.percentComplete || 0}%</span>
+                    </div>
+                    <div className="flex flex-col items-end">
+                      <span className="text-[7px] text-white/30 uppercase font-bold">Due Date</span>
+                      <span className="text-[9px] text-white font-mono">{task.endDate}</span>
+                    </div>
+                  </div>
+                  {sortedTasks.length > 1 && (
+                    <div className="mt-3 pt-2 border-t border-white/5 text-center">
+                      <span className="text-[7px] text-[var(--brand-10)] font-black uppercase tracking-widest animate-pulse">
+                        Scroll to cycle stack ({activeIndex + 1}/{sortedTasks.length})
+                      </span>
+                    </div>
+                  )}
+                </motion.div>
+              )}
+            </motion.div>
+          );
+        })}
+      </div>
+    </div>
+  );
+};
+
 export const Roadmap: React.FC = () => {
+  const [roadmapData, setRoadmapData] = useState<PersonRoadmap[]>([]);
   const months = ['Mar', 'Apr', 'May', 'Jun'];
   const [isTimelineMaximized, setIsTimelineMaximized] = useState(true);
   const [activeCard, setActiveCard] = useState<CardState | null>(null);
@@ -169,6 +212,7 @@ export const Roadmap: React.FC = () => {
   const [newNote, setNewNote] = useState('');
   const [activeTab, setActiveTab] = useState<'NOTES' | 'CHAT'>('NOTES');
   const [isProcessing, setIsProcessing] = useState(false);
+  const [isExpanded, setIsExpanded] = useState(false);
   const { user } = useAuth();
   const [chatMessages, setChatMessages] = useState<{[key: string]: {id: string, text: string, sender: string, timestamp: string}[]}>({});
   const [newChatMessage, setNewChatMessage] = useState('');
@@ -177,6 +221,107 @@ export const Roadmap: React.FC = () => {
 
   const today = new Date('2026-03-20');
   const todayPosition = calculatePosition('2026-03-20');
+
+  const getTaskPriority = (t: RoadmapTask) => {
+    if (t.status === 'COMPLETED') return 0;
+    const todayDate = new Date('2026-03-20');
+    const dueDate = new Date(t.endDate);
+    const diffDays = Math.ceil((dueDate.getTime() - todayDate.getTime()) / (1000 * 60 * 60 * 24));
+    if (diffDays < 0) return 3; // Red
+    if (diffDays <= 3) return 2; // Yellow
+    return 1; // Green
+  };
+
+  const groupTasksIntoStacks = (tasks: RoadmapTask[]) => {
+    if (tasks.length === 0) return [];
+    const sorted = [...tasks].sort((a, b) => new Date(a.startDate).getTime() - new Date(b.startDate).getTime());
+    const stacks: RoadmapTask[][] = [];
+    
+    sorted.forEach(task => {
+      let placed = false;
+      for (const stack of stacks) {
+        const stackEnd = Math.max(...stack.map(t => new Date(t.endDate).getTime()));
+        const taskStart = new Date(task.startDate).getTime();
+        if (taskStart < stackEnd) {
+          stack.push(task);
+          placed = true;
+          break;
+        }
+      }
+      if (!placed) stacks.push([task]);
+    });
+    return stacks;
+  };
+
+  useEffect(() => {
+    const unsubUsers = onSnapshot(collection(db, 'users'), (usersSnap) => {
+      let users = usersSnap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+      
+      // Restore "Executive Panel" look if few users exist
+      if (users.length < 5) {
+        const placeholders = [
+          { id: 'p1', displayName: 'SARAH CHEN', role: 'CHIEF OPERATING OFFICER', photoURL: 'https://i.pravatar.cc/150?u=sarah' },
+          { id: 'p2', displayName: 'MARCUS REED', role: 'VP OF MANUFACTURING', photoURL: 'https://i.pravatar.cc/150?u=marcus' },
+          { id: 'p3', displayName: 'ELENA RODRIGUEZ', role: 'HEAD OF LOGISTICS', photoURL: 'https://i.pravatar.cc/150?u=elena' },
+          { id: 'p4', displayName: 'KEVIN MALONE', role: 'CHIEF FINANCIAL OFFICER', photoURL: 'https://i.pravatar.cc/150?u=kevin' }
+        ];
+        // Only add placeholders that don't conflict with real user IDs or names
+        const existingIds = new Set(users.map(u => u.id));
+        const existingNames = new Set(users.map(u => u.displayName?.toUpperCase()));
+        placeholders.forEach(p => {
+          if (!existingIds.has(p.id) && !existingNames.has(p.displayName)) users.push(p);
+        });
+      }
+
+      const unsubObjectives = onSnapshot(collection(db, 'objectives'), (objSnap) => {
+        const objectives = objSnap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+        
+        const mappedData = users.map((u: any, index) => {
+          const userObjectives = objectives.filter((o: any) => o.assignedToId === u.id);
+          const colors = ['bg-indigo-600', 'bg-indigo-500', 'bg-indigo-400', 'bg-emerald-500', 'bg-indigo-300', 'bg-indigo-400', 'bg-emerald-400'];
+          
+          return {
+            id: u.id,
+            name: u.displayName?.toUpperCase() || 'UNKNOWN',
+            role: u.role || 'Team Member',
+            avatar: u.photoURL || `https://picsum.photos/seed/${u.id}/100/100`,
+            color: colors[index % colors.length],
+            isActive: true,
+            tasks: userObjectives.map((o: any) => {
+              const start = o.startDate ? (o.startDate instanceof Timestamp ? o.startDate.toDate().toISOString().split('T')[0] : o.startDate) : 
+                           (o.createdAt instanceof Timestamp ? o.createdAt.toDate().toISOString().split('T')[0] : '2026-03-01');
+              
+              return {
+                id: o.id,
+                title: o.title,
+                startDate: start,
+                endDate: o.dueDate instanceof Timestamp ? o.dueDate.toDate().toISOString().split('T')[0] : new Date(o.dueDate).toISOString().split('T')[0],
+                status: o.status === 'COMPLETED' ? 'COMPLETED' : (o.status === 'NOT_STARTED' ? 'PENDING' : 'IN_PROGRESS'),
+                priority: o.priority,
+                description: o.description,
+                percentComplete: o.percentComplete || 0,
+                notes: [],
+                files: []
+              };
+            })
+          };
+        });
+        setRoadmapData(mappedData);
+      }, (error) => {
+        handleFirestoreError(error, OperationType.GET, 'objectives');
+      });
+      
+      return () => unsubObjectives();
+    }, (error) => {
+      handleFirestoreError(error, OperationType.GET, 'users');
+    });
+    
+    return () => unsubUsers();
+  }, []);
+
+  const highPriorityTasks = roadmapData.flatMap(p => 
+    p.tasks.filter(t => t.priority === 'HIGH' || t.priority === 'CRITICAL').map(t => ({ ...t, owner: p.name }))
+  );
 
   useEffect(() => {
     if (!activeCard || activeTab !== 'CHAT' || !user) return;
@@ -254,19 +399,24 @@ export const Roadmap: React.FC = () => {
     }
   };
 
-  const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file || !activeCard) return;
 
     setIsUploading(true);
-    // Simulate upload
-    setTimeout(() => {
+    const targetId = activeCard.type === 'TASK' ? activeCard.task.id : activeCard.person.id;
+    const storageRef = ref(storage, `uploads/${targetId}/${file.name}`);
+
+    try {
+      const snapshot = await uploadBytes(storageRef, file);
+      const url = await getDownloadURL(snapshot.ref);
+
       const newFile: TaskFile = {
         id: Math.random().toString(36).substr(2, 9),
         name: file.name,
         type: file.name.split('.').pop()?.toUpperCase() || 'FILE',
         size: `${(file.size / (1024 * 1024)).toFixed(1)} MB`,
-        url: '#'
+        url: url
       };
 
       if (activeCard.type === 'TASK') {
@@ -282,8 +432,11 @@ export const Roadmap: React.FC = () => {
         };
         setActiveCard({ ...activeCard, person: updatedPerson });
       }
+    } catch (error) {
+      console.error("Error uploading file:", error);
+    } finally {
       setIsUploading(false);
-    }, 1500);
+    }
   };
   
   return (
@@ -330,7 +483,7 @@ export const Roadmap: React.FC = () => {
               <div className="flex items-center justify-between mb-1 px-2">
                 <span className="text-[9px] font-black text-[var(--accents-5)] uppercase tracking-[0.2em]">{column}</span>
                 <div className="text-[10px] font-black text-white opacity-40">
-                  {HIGH_PRIORITY_TASKS.filter(t => 
+                  {highPriorityTasks.filter(t => 
                     (column === 'TO DO' && t.status === 'PENDING') ||
                     (column === 'IN PROGRESS' && t.status === 'IN_PROGRESS') ||
                     (column === 'DONE' && t.status === 'COMPLETED')
@@ -339,7 +492,7 @@ export const Roadmap: React.FC = () => {
               </div>
               
               <div className="flex flex-col gap-2 max-h-[100px] overflow-y-auto custom-scrollbar pr-2">
-                {HIGH_PRIORITY_TASKS.filter(t => 
+                {highPriorityTasks.filter(t => 
                   (column === 'TO DO' && t.status === 'PENDING') ||
                   (column === 'IN PROGRESS' && t.status === 'IN_PROGRESS') ||
                   (column === 'DONE' && t.status === 'COMPLETED')
@@ -348,7 +501,7 @@ export const Roadmap: React.FC = () => {
                     key={task.id}
                     whileHover={{ scale: 1.02, backgroundColor: 'rgba(255,255,255,0.04)' }}
                     onClick={() => {
-                      const person = MOCK_ROADMAP.find(p => p.name === task.owner);
+                      const person = roadmapData.find(p => p.name === task.owner);
                       if (person) setActiveCard({ type: 'TASK', task, owner: person.name, ownerId: person.id });
                     }}
                     className="bg-white/[0.02] border border-white/5 p-3 rounded-2xl transition-colors group cursor-pointer"
@@ -398,7 +551,7 @@ export const Roadmap: React.FC = () => {
               <span className="hidden md:inline">Executive Panel</span>
               <span className="md:hidden">Exec</span>
             </div>
-            {MOCK_ROADMAP.map(person => (
+            {roadmapData.map(person => (
               <div key={person.id} className="relative group">
                 <div 
                   onClick={() => {
@@ -451,8 +604,8 @@ export const Roadmap: React.FC = () => {
           </div>
 
           {/* Right Panel: Timeline */}
-          <div className="flex-1 relative bg-white/[0.01] border border-white/5 rounded-[2rem] md:rounded-[3rem] p-4 md:p-8 overflow-hidden flex flex-col">
-            <div className="flex-1 relative overflow-y-auto overflow-x-auto custom-scrollbar pr-2 md:pr-4">
+          <div className="flex-1 relative bg-white/[0.01] border border-white/5 rounded-[2rem] md:rounded-[3rem] p-4 md:p-8 flex flex-col">
+            <div className="flex-1 relative overflow-y-auto overflow-x-auto custom-scrollbar pr-2 md:pr-4 pt-20">
               <div className="min-w-[600px] h-full relative">
                 {/* Timeline Grid Lines */}
               <div className="absolute inset-0 flex justify-between pointer-events-none">
@@ -473,44 +626,25 @@ export const Roadmap: React.FC = () => {
               </div>
 
               {/* Task Tracks */}
-              <div className="relative flex flex-col gap-2 pt-8">
-                {MOCK_ROADMAP.map(person => (
-                  <div key={person.id} className="h-[52px] flex items-center relative border-b border-white/[0.02]">
-                    {person.tasks.map((task, i) => {
-                    const left = calculatePosition(task.startDate);
-                    const width = calculatePosition(task.endDate) - left;
-                    
-                    return (
-                      <motion.div
-                        key={task.id}
-                        initial={{ opacity: 0, scaleX: 0 }}
-                        animate={{ opacity: 1, scaleX: 1 }}
-                        onClick={() => setActiveCard({ type: 'TASK', task, owner: person.name, ownerId: person.id })}
-                        transition={{ delay: i * 0.1, duration: 0.8, ease: "circOut" }}
-                        className={`
-                          absolute h-9 rounded-xl border flex items-center px-4 gap-3 cursor-pointer hover:brightness-125 transition-all group/task
-                          ${task.status === 'COMPLETED' ? 'bg-blue-400/10 border-blue-400/30 text-blue-400' : 
-                            task.status === 'IN_PROGRESS' ? 'bg-[var(--brand-10)]/20 border-[var(--brand-10)]/40 text-white' : 
-                            'bg-white/5 border-white/10 text-[var(--accents-5)]'}
-                        `}
-                        style={{ 
-                          left: `${left}%`, 
-                          width: `${Math.max(width, 10)}%`,
-                          transformOrigin: 'left'
-                        }}
-                      >
-                        <div className="w-5 h-5 rounded-lg bg-white/10 flex items-center justify-center flex-shrink-0 group-hover/task:bg-white/20 transition-colors">
-                          {task.status === 'COMPLETED' ? <CheckCircle2 className="w-3 h-3" /> : <Clock className="w-3 h-3" />}
-                        </div>
-                        <div className="flex flex-col min-w-0">
-                          <span className="text-[9px] font-black uppercase tracking-tight truncate">{task.title}</span>
-                          <span className="text-[7px] opacity-40 font-mono uppercase truncate">{task.startDate} - {task.endDate}</span>
-                        </div>
-                      </motion.div>
-                    );
-                  })}
-                  </div>
-                ))}
+              <div className="relative flex flex-col gap-6 pt-8">
+                {roadmapData.map((person, personIdx) => {
+                  const stacks = groupTasksIntoStacks(person.tasks);
+                  return (
+                    <div key={person.id} className="min-h-[64px] flex items-center relative border-b border-white/[0.02] py-4">
+                      {stacks.map((stack, stackIdx) => (
+                        <TaskStack 
+                          key={stackIdx}
+                          tasks={stack}
+                          person={person}
+                          calculatePosition={calculatePosition}
+                          setActiveCard={setActiveCard}
+                          getTaskPriority={getTaskPriority}
+                          isFirstRow={personIdx === 0}
+                        />
+                      ))}
+                    </div>
+                  );
+                })}
               </div>
             </div>
           </div>
@@ -550,7 +684,7 @@ export const Roadmap: React.FC = () => {
                       
                       <button 
                         onClick={() => {
-                          const person = MOCK_ROADMAP.find(p => p.id === activeCard.ownerId);
+                          const person = roadmapData.find(p => p.id === activeCard.ownerId);
                           if (person) setActiveCard({ type: 'PERSON', person });
                         }}
                         className="flex items-center gap-3 text-[var(--accents-5)] mb-6 md:mb-8 hover:text-white transition-colors group text-left"
@@ -562,7 +696,7 @@ export const Roadmap: React.FC = () => {
                       <div className="grid grid-cols-2 gap-3">
                         <button 
                           onClick={() => {
-                            const person = MOCK_ROADMAP.find(p => p.id === activeCard.ownerId);
+                            const person = roadmapData.find(p => p.id === activeCard.ownerId);
                             if (person) { setActiveCard({ type: 'PERSON', person }); setActiveTab('CHAT'); }
                           }}
                           className="secondary-button !px-4 !py-4 !text-[9px] flex items-center justify-center gap-2 border-white/10"
@@ -681,7 +815,7 @@ export const Roadmap: React.FC = () => {
 
               {/* Right Panel: Strategic Notes & Intelligence / Communication */}
               <div className="flex-1 p-6 md:p-12 flex flex-col gap-4 md:gap-8 bg-black/20 min-h-0 md:min-h-[400px]">
-                <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+                <div className={`flex flex-col md:flex-row md:items-center justify-between gap-4 ${isExpanded ? 'hidden' : 'flex'}`}>
                   <div className="flex items-center gap-3 md:gap-6">
                     <button 
                       onClick={() => setActiveTab('NOTES')}
@@ -707,7 +841,12 @@ export const Roadmap: React.FC = () => {
                   </div>
                 </div>
 
-                <div className="flex-1 overflow-y-auto space-y-6 pr-4 custom-scrollbar">
+                <div className={`flex-1 overflow-y-auto space-y-6 pr-4 custom-scrollbar ${isExpanded ? 'fixed inset-0 z-50 bg-black/90 p-12' : ''}`}>
+                  {isExpanded && (
+                    <button onClick={() => setIsExpanded(false)} className="absolute top-6 right-6 text-white/50 hover:text-white">
+                      <X className="w-8 h-8" />
+                    </button>
+                  )}
                   {activeTab === 'NOTES' ? (
                     <>
                       {(activeCard.type === 'TASK' ? activeCard.task.notes : activeCard.person.notes)?.map(note => (
@@ -750,6 +889,11 @@ export const Roadmap: React.FC = () => {
                         </div>
                       )}
                     </div>
+                  )}
+                  {!isExpanded && (
+                    <button onClick={() => setIsExpanded(true)} className="absolute bottom-6 right-6 bg-white/10 p-2 rounded-full hover:bg-white/20">
+                      <Zap className="w-4 h-4 text-white" />
+                    </button>
                   )}
                 </div>
 

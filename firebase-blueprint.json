@@ -118,6 +118,22 @@
         "link": { "type": "string" }
       },
       "required": ["id", "userId", "title", "message", "type", "read", "createdAt"]
+    },
+    "Source": {
+      "title": "Source",
+      "description": "Knowledge base source (text or file).",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "name": { "type": "string" },
+        "type": { "type": "string", "enum": ["TEXT", "FILE"] },
+        "content": { "type": "string" },
+        "url": { "type": "string" },
+        "fileType": { "type": "string" },
+        "authorId": { "type": "string" },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["name", "type", "content", "authorId", "createdAt"]
     }
   },
   "firestore": {
@@ -148,6 +164,10 @@
     "/notifications/{notificationId}": {
       "schema": "Notification",
       "description": "User notifications"
+    },
+    "/sources/{sourceId}": {
+      "schema": "Source",
+      "description": "Knowledge base sources"
     }
   }
 }
