@@ -253,71 +253,80 @@ export const Roadmap: React.FC = () => {
     return stacks;
   };
 
+  const [objectives, setObjectives] = useState<any[]>([]);
+  const [users, setUsers] = useState<any[]>([]);
+
   useEffect(() => {
-    const unsubUsers = onSnapshot(collection(db, 'users'), (usersSnap) => {
-      let users = usersSnap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+    const q = collection(db, 'users');
+    const unsubscribe = onSnapshot(q, (snapshot) => {
+      let usersData: any[] = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
       
       // Restore "Executive Panel" look if few users exist
-      if (users.length < 5) {
+      if (usersData.length < 5) {
         const placeholders = [
           { id: 'p1', displayName: 'SARAH CHEN', role: 'CHIEF OPERATING OFFICER', photoURL: 'https://i.pravatar.cc/150?u=sarah' },
           { id: 'p2', displayName: 'MARCUS REED', role: 'VP OF MANUFACTURING', photoURL: 'https://i.pravatar.cc/150?u=marcus' },
           { id: 'p3', displayName: 'ELENA RODRIGUEZ', role: 'HEAD OF LOGISTICS', photoURL: 'https://i.pravatar.cc/150?u=elena' },
           { id: 'p4', displayName: 'KEVIN MALONE', role: 'CHIEF FINANCIAL OFFICER', photoURL: 'https://i.pravatar.cc/150?u=kevin' }
         ];
-        // Only add placeholders that don't conflict with real user IDs or names
-        const existingIds = new Set(users.map(u => u.id));
-        const existingNames = new Set(users.map(u => u.displayName?.toUpperCase()));
+        const existingIds = new Set(usersData.map(u => u.id));
+        const existingNames = new Set(usersData.map(u => u.displayName?.toUpperCase()));
         placeholders.forEach(p => {
-          if (!existingIds.has(p.id) && !existingNames.has(p.displayName)) users.push(p);
+          if (!existingIds.has(p.id) && !existingNames.has(p.displayName)) usersData.push(p);
         });
       }
-
-      const unsubObjectives = onSnapshot(collection(db, 'objectives'), (objSnap) => {
-        const objectives = objSnap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-        
-        const mappedData = users.map((u: any, index) => {
-          const userObjectives = objectives.filter((o: any) => o.assignedToId === u.id);
-          const colors = ['bg-indigo-600', 'bg-indigo-500', 'bg-indigo-400', 'bg-emerald-500', 'bg-indigo-300', 'bg-indigo-400', 'bg-emerald-400'];
-          
-          return {
-            id: u.id,
-            name: u.displayName?.toUpperCase() || 'UNKNOWN',
-            role: u.role || 'Team Member',
-            avatar: u.photoURL || `https://picsum.photos/seed/${u.id}/100/100`,
-            color: colors[index % colors.length],
-            isActive: true,
-            tasks: userObjectives.map((o: any) => {
-              const start = o.startDate ? (o.startDate instanceof Timestamp ? o.startDate.toDate().toISOString().split('T')[0] : o.startDate) : 
-                           (o.createdAt instanceof Timestamp ? o.createdAt.toDate().toISOString().split('T')[0] : '2026-03-01');
-              
-              return {
-                id: o.id,
-                title: o.title,
-                startDate: start,
-                endDate: o.dueDate instanceof Timestamp ? o.dueDate.toDate().toISOString().split('T')[0] : new Date(o.dueDate).toISOString().split('T')[0],
-                status: o.status === 'COMPLETED' ? 'COMPLETED' : (o.status === 'NOT_STARTED' ? 'PENDING' : 'IN_PROGRESS'),
-                priority: o.priority,
-                description: o.description,
-                percentComplete: o.percentComplete || 0,
-                notes: [],
-                files: []
-              };
-            })
-          };
-        });
-        setRoadmapData(mappedData);
-      }, (error) => {
-        handleFirestoreError(error, OperationType.GET, 'objectives');
-      });
-      
-      return () => unsubObjectives();
+      setUsers(usersData);
     }, (error) => {
       handleFirestoreError(error, OperationType.GET, 'users');
     });
-    
-    return () => unsubUsers();
+    return () => unsubscribe();
   }, []);
+
+  useEffect(() => {
+    const q = collection(db, 'objectives');
+    const unsubscribe = onSnapshot(q, (snapshot) => {
+      setObjectives(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
+    }, (error) => {
+      handleFirestoreError(error, OperationType.GET, 'objectives');
+    });
+    return () => unsubscribe();
+  }, []);
+
+  useEffect(() => {
+    if (users.length === 0) return;
+
+    const mappedData = users.map((u: any, index) => {
+      const userObjectives = objectives.filter((o: any) => o.assignedToId === u.id);
+      const colors = ['bg-indigo-600', 'bg-indigo-500', 'bg-indigo-400', 'bg-emerald-500', 'bg-indigo-300', 'bg-indigo-400', 'bg-emerald-400'];
+      
+      return {
+        id: u.id,
+        name: u.displayName?.toUpperCase() || 'UNKNOWN',
+        role: u.role || 'Team Member',
+        avatar: u.photoURL || `https://picsum.photos/seed/${u.id}/100/100`,
+        color: colors[index % colors.length],
+        isActive: true,
+        tasks: userObjectives.map((o: any) => {
+          const start = o.startDate ? (o.startDate instanceof Timestamp ? o.startDate.toDate().toISOString().split('T')[0] : o.startDate) : 
+                       (o.createdAt instanceof Timestamp ? o.createdAt.toDate().toISOString().split('T')[0] : '2026-03-01');
+          
+          return {
+            id: o.id,
+            title: o.title,
+            startDate: start,
+            endDate: o.dueDate instanceof Timestamp ? o.dueDate.toDate().toISOString().split('T')[0] : new Date(o.dueDate).toISOString().split('T')[0],
+            status: o.status === 'COMPLETED' ? 'COMPLETED' : (o.status === 'NOT_STARTED' ? 'PENDING' : 'IN_PROGRESS'),
+            priority: o.priority,
+            description: o.description,
+            percentComplete: o.percentComplete || 0,
+            notes: [],
+            files: []
+          };
+        })
+      };
+    });
+    setRoadmapData(mappedData);
+  }, [users, objectives]);
 
   const highPriorityTasks = roadmapData.flatMap(p => 
     p.tasks.filter(t => t.priority === 'HIGH' || t.priority === 'CRITICAL').map(t => ({ ...t, owner: p.name }))

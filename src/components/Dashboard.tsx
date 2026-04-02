@@ -159,13 +159,8 @@ export const Dashboard: React.FC = () => {
       const data = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Objective));
       setObjectives(data);
       setLoading(false);
-      
-      // Fetch daily briefing once objectives are loaded
-      if (data.length > 0 && !dailyBriefing && !isBriefingLoading) {
-        fetchBriefing(data);
-      }
     }, (error) => {
-      console.error("Objectives fetch error:", error);
+      handleFirestoreError(error, OperationType.GET, 'objectives');
       setLoading(false);
     });
 
@@ -180,6 +175,12 @@ export const Dashboard: React.FC = () => {
       unsubSources();
     };
   }, [user]);
+
+  useEffect(() => {
+    if (objectives.length > 0 && !dailyBriefing && !isBriefingLoading) {
+      fetchBriefing(objectives);
+    }
+  }, [objectives.length, dailyBriefing, isBriefingLoading]);
 
   const fetchBriefing = async (currentObjectives: Objective[]) => {
     setIsBriefingLoading(true);
@@ -261,11 +262,14 @@ export const Dashboard: React.FC = () => {
   const kpis = {
     open: objectives.filter(o => o.status !== 'COMPLETED' && o.status !== 'CANCELLED').length,
     overdue: objectives.filter(o => {
+      if (!o.dueDate) return false;
       const due = o.dueDate instanceof Timestamp ? o.dueDate.toDate() : new Date(o.dueDate);
-      return due < new Date() && o.status !== 'COMPLETED' && o.status !== 'CANCELLED';
+      return !isNaN(due.getTime()) && due < new Date() && o.status !== 'COMPLETED' && o.status !== 'CANCELLED';
     }).length,
     dueSoon: objectives.filter(o => {
+      if (!o.dueDate) return false;
       const due = o.dueDate instanceof Timestamp ? o.dueDate.toDate() : new Date(o.dueDate);
+      if (isNaN(due.getTime())) return false;
       const diff = due.getTime() - new Date().getTime();
       const days = diff / (1000 * 60 * 60 * 24);
       return days > 0 && days <= 7 && o.status !== 'COMPLETED' && o.status !== 'CANCELLED';

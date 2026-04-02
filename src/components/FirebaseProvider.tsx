@@ -44,7 +44,15 @@ export const FirebaseProvider: React.FC<{ children: React.ReactNode }> = ({ chil
   };
 
   useEffect(() => {
+    const timeout = setTimeout(() => {
+      if (loading) {
+        console.warn("Firebase initialization timed out, forcing login screen.");
+        setLoading(false);
+      }
+    }, 10000);
+
     const unsubscribeAuth = onAuthStateChanged(auth, (currentUser) => {
+      clearTimeout(timeout);
       setUser(currentUser);
       if (!currentUser) {
         setProfile(null);
@@ -52,8 +60,11 @@ export const FirebaseProvider: React.FC<{ children: React.ReactNode }> = ({ chil
       }
     });
 
-    return () => unsubscribeAuth();
-  }, []);
+    return () => {
+      clearTimeout(timeout);
+      unsubscribeAuth();
+    };
+  }, [loading]);
 
   useEffect(() => {
     if (user) {

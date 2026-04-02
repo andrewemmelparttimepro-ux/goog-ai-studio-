@@ -4,7 +4,7 @@ import path from 'path';
 import { fileURLToPath } from 'url';
 import { initializeApp } from 'firebase/app';
 import { getFirestore, collection, getDocs, query, orderBy, where, addDoc, serverTimestamp } from 'firebase/firestore';
-import firebaseConfig from './firebase-applet-config.json';
+import firebaseConfig from './firebase-applet-config.json' with { type: 'json' };
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
@@ -72,10 +72,11 @@ async function startServer() {
   app.post('/api/system/check-overdue', async (req, res) => {
     try {
       const now = new Date();
+      // Firestore doesn't allow multiple inequality filters on different fields.
+      // We'll fetch all non-completed objectives and filter by dueDate in memory.
       const q = query(
         collection(db, 'objectives'),
-        where('status', '!=', 'COMPLETED'),
-        where('dueDate', '<', now)
+        where('status', '!=', 'COMPLETED')
       );
       
       const snapshot = await getDocs(q);
@@ -83,28 +84,32 @@ async function startServer() {
 
       for (const docSnap of snapshot.docs) {
         const obj = docSnap.data();
-        const notificationData = {
-          userId: obj.assignedToId,
-          title: "Objective Overdue",
-          message: `The objective "${obj.title}" is past its due date. Action required.`,
-          type: "OVERDUE",
-          read: false,
-          createdAt: serverTimestamp(),
-          link: `/objective/${docSnap.id}`
-        };
+        const dueDate = obj.dueDate?.toDate?.() || new Date(obj.dueDate);
         
-        // Check if notification already exists to avoid spam
-        const existingQ = query(
-          collection(db, 'notifications'),
-          where('userId', '==', obj.assignedToId),
-          where('link', '==', `/objective/${docSnap.id}`),
-          where('read', '==', false)
-        );
-        const existingSnap = await getDocs(existingQ);
-        
-        if (existingSnap.empty) {
-          await addDoc(collection(db, 'notifications'), notificationData);
-          notificationsCreated.push({ id: docSnap.id, title: obj.title });
+        if (dueDate < now) {
+          const notificationData = {
+            userId: obj.assignedToId,
+            title: "Objective Overdue",
+            message: `The objective "${obj.title}" is past its due date. Action required.`,
+            type: "OVERDUE",
+            read: false,
+            createdAt: serverTimestamp(),
+            link: `/objective/${docSnap.id}`
+          };
+          
+          // Check if notification already exists to avoid spam
+          const existingQ = query(
+            collection(db, 'notifications'),
+            where('userId', '==', obj.assignedToId),
+            where('link', '==', `/objective/${docSnap.id}`),
+            where('read', '==', false)
+          );
+          const existingSnap = await getDocs(existingQ);
+          
+          if (existingSnap.empty) {
+            await addDoc(collection(db, 'notifications'), notificationData);
+            notificationsCreated.push({ id: docSnap.id, title: obj.title });
+          }
         }
       }
 
