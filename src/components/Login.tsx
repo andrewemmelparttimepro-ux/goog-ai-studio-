@@ -58,7 +58,8 @@ export const Login: React.FC = () => {
     const userSnap = await getDoc(userRef);
 
     if (!userSnap.exists()) {
-      const isAdmin = user.email === 'andrewemmelparttimepro@gmail.com';
+      const adminEmail = import.meta.env.VITE_ADMIN_EMAIL || 'andrewemmelparttimepro@gmail.com';
+      const isAdmin = user.email === adminEmail;
       await setDoc(userRef, {
         uid: user.uid,
         email: user.email,
@@ -75,30 +76,50 @@ export const Login: React.FC = () => {
         const nextMonth = new Date();
         nextMonth.setMonth(today.getMonth() + 1);
         
-        await addDoc(objectivesRef, {
+        const obj1Ref = doc(objectivesRef);
+        await setDoc(obj1Ref, {
+          id: obj1Ref.id,
           title: 'Q1 Financial Audit',
           description: 'Complete the quarterly financial audit for all departments.',
           status: 'IN_PROGRESS',
           priority: 'HIGH',
           assignedToId: user.uid,
+          assignedToName: displayName,
+          initiatedById: user.uid,
+          groupId: '',
+          groupName: 'Administration',
           percentComplete: 45,
           startDate: serverTimestamp(),
           dueDate: Timestamp.fromDate(nextMonth),
-          createdAt: serverTimestamp()
+          createdAt: serverTimestamp(),
+          updatedAt: serverTimestamp(),
+          metrics: [],
+          subtasks: [],
+          acknowledged: false,
         });
 
         const inTwoMonths = new Date();
         inTwoMonths.setMonth(today.getMonth() + 2);
-        await addDoc(objectivesRef, {
+        const obj2Ref = doc(objectivesRef);
+        await setDoc(obj2Ref, {
+          id: obj2Ref.id,
           title: 'Budget Allocation Review',
           description: 'Review and approve budget allocations for the manufacturing expansion.',
           status: 'NOT_STARTED',
           priority: 'MEDIUM',
           assignedToId: user.uid,
+          assignedToName: displayName,
+          initiatedById: user.uid,
+          groupId: '',
+          groupName: 'Administration',
           percentComplete: 0,
           startDate: serverTimestamp(),
           dueDate: Timestamp.fromDate(inTwoMonths),
-          createdAt: serverTimestamp()
+          createdAt: serverTimestamp(),
+          updatedAt: serverTimestamp(),
+          metrics: [],
+          subtasks: [],
+          acknowledged: false,
         });
       }
     }

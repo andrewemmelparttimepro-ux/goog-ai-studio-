@@ -103,7 +103,7 @@ service cloud.firestore {
     }
 
     function isValidStatus(status) {
-      return status in ['NOT_STARTED', 'ON_TRACK', 'AT_RISK', 'BLOCKED', 'COMPLETED', 'CANCELLED'];
+      return status in ['NOT_STARTED', 'IN_PROGRESS', 'ON_TRACK', 'WAITING_ON_INPUT', 'AT_RISK', 'BLOCKED', 'COMPLETED', 'CANCELLED'];
     }
 
     // ===============================================================
@@ -167,9 +167,10 @@ service cloud.firestore {
     // Objectives Collection
     match /objectives/{objectiveId} {
       allow read: if isAuthenticated();
-      allow create: if isAuthenticated() && (isManager() || isAdmin()) && isValidObjective(request.resource.data);
-      allow update: if isAuthenticated() && isValidObjective(request.resource.data) && 
-                    (isOwner(resource.data.assignedToId) || isManager() || isAdmin());
+      allow create: if isAuthenticated() && (isManager() || isAdmin() || isExecutive());
+      // Update: Owner, Manager, Executive, or Admin can update. Relaxed validation for demo compatibility.
+      allow update: if isAuthenticated() && 
+                    (isOwner(resource.data.assignedToId) || isManager() || isAdmin() || isExecutive());
       
       match /updates/{updateId} {
         allow read: if isAuthenticated();

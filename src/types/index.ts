@@ -1,7 +1,7 @@
 import { Timestamp } from 'firebase/firestore';
 
 export type Priority = 'LOW' | 'MEDIUM' | 'HIGH' | 'CRITICAL';
-export type ObjectiveStatus = 'NOT_STARTED' | 'ON_TRACK' | 'AT_RISK' | 'BLOCKED' | 'COMPLETED' | 'CANCELLED';
+export type ObjectiveStatus = 'NOT_STARTED' | 'IN_PROGRESS' | 'ON_TRACK' | 'WAITING_ON_INPUT' | 'AT_RISK' | 'BLOCKED' | 'COMPLETED' | 'CANCELLED';
 export type NotificationType = 'OVERDUE' | 'STATUS_CHANGE' | 'ASSIGNMENT' | 'SYSTEM';
 export type UserRole = 'ADMIN' | 'EXECUTIVE' | 'MANAGER' | 'CONTRIBUTOR';
 
@@ -93,12 +93,15 @@ export interface ChatMessage {
 
 export interface Source {
   id: string;
-  title: string;
+  name: string;
+  title?: string;
   content: string;
   type: 'TEXT' | 'FILE';
+  fileType?: string;
   url?: string;
   createdAt: Timestamp;
-  createdBy: string;
+  authorId: string;
+  createdBy?: string;
   embedding?: number[];
 }
 
