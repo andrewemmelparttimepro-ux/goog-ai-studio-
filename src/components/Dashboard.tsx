@@ -10,47 +10,10 @@ import { Roadmap } from './Roadmap';
 import { NotificationCenter } from './NotificationCenter';
 import { fetchExternalMetric } from '../services/externalDataService';
 import { Brain, TrendingUp, History, ChevronRight, LayoutDashboard, Zap, Menu, X, RefreshCw, Plus, Search } from 'lucide-react';
-
-interface Metric {
-  label: string;
-  baseline: number;
-  target: number;
-  current: number;
-  unit: string;
-  integrationId?: string;
-  externalSource?: 'KPH_EHS' | 'SAP' | 'MANUAL';
-}
-
-interface Subtask {
-  id: string;
-  title: string;
-  completed: boolean;
-}
-
-interface Objective {
-  id: string;
-  title: string;
-  description: string;
-  assignedToId: string;
-  status: string;
-  priority: string;
-  dueDate: any;
-  percentComplete: number;
-  metrics?: Metric[];
-  subtasks?: Subtask[];
-}
+import type { Objective, Source } from '../types';
 
 import { generatePortfolioSummary, generateDailyBriefing, DailyBriefing } from '../services/aiService';
 import { motion, AnimatePresence } from 'framer-motion';
-
-interface Source {
-  id: string;
-  name: string;
-  type: string;
-  content: string;
-  url?: string;
-  createdAt?: any;
-}
 
 export const Dashboard: React.FC = () => {
   const { user, profile } = useAuth();

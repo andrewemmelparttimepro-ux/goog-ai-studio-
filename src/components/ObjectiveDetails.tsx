@@ -4,27 +4,11 @@ import { doc, onSnapshot, updateDoc, collection, addDoc, serverTimestamp, query,
 import { useAuth } from './FirebaseProvider';
 import { X, MessageSquare, Clock, CheckCircle2, AlertCircle, Ban, RefreshCw } from 'lucide-react';
 import { fetchExternalMetric } from '../services/externalDataService';
-
-import { analyzeObjectiveRisk, RiskAnalysis } from '../services/aiService';
+import type { ObjectiveUpdate, StatusHistoryEntry, RiskAnalysis } from '../types';
+import { analyzeObjectiveRisk } from '../services/aiService';
 import { Sparkles, Brain, TrendingUp, History, ChevronRight } from 'lucide-react';
 
-interface ObjectiveUpdate {
-  id: string;
-  text: string;
-  authorName: string;
-  createdAt: any;
-  statusAtTime: string;
-}
 
-interface StatusHistoryEntry {
-  id: string;
-  oldStatus: string;
-  newStatus: string;
-  changedBy: string;
-  changedByName: string;
-  timestamp: any;
-  comment?: string;
-}
 
 interface ObjectiveDetailsProps {
   objectiveId: string;

@@ -1,13 +1,10 @@
 import { GoogleGenAI, Type } from "@google/genai";
+import type { RiskAnalysis, DailyBriefing } from '../types';
+
+// Re-export for consumers
+export type { RiskAnalysis, DailyBriefing };
 
 const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
-
-export interface RiskAnalysis {
-  riskLevel: 'LOW' | 'MEDIUM' | 'HIGH' | 'CRITICAL';
-  summary: string;
-  recommendations: string[];
-  confidence: number;
-}
 
 const isQuotaError = (error: any) => {
   const str = typeof error === 'string' ? error : JSON.stringify(error) + (error?.message || '');
@@ -74,13 +71,7 @@ export const analyzeObjectiveRisk = async (objectiveData: any): Promise<RiskAnal
   }
 };
 
-export interface DailyBriefing {
-  headline: string;
-  summary: string;
-  priorityFocus: string;
-  newsInsight: string;
-  imageSeed: string;
-}
+
 
 const sleep = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
 

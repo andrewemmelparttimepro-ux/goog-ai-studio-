@@ -19,10 +19,27 @@ async function startServer() {
   app.use(express.json());
 
   // ==========================================
+  // API AUTH MIDDLEWARE
+  // ==========================================
+  
+  const API_KEY = process.env.SP_API_KEY || 'sp-omp-internal-key';
+  
+  const requireApiAuth = (req: express.Request, res: express.Response, next: express.NextFunction) => {
+    const authHeader = req.headers.authorization;
+    const queryKey = req.query.key as string;
+    const providedKey = authHeader?.replace('Bearer ', '') || queryKey;
+    
+    if (!providedKey || providedKey !== API_KEY) {
+      return res.status(401).json({ error: 'Unauthorized. Provide a valid API key via Authorization header or ?key= parameter.' });
+    }
+    next();
+  };
+
+  // ==========================================
   // POWER BI REPORTING API (The "Jake" Routes)
   // ==========================================
   
-  app.get('/api/reporting/objectives', async (req, res) => {
+  app.get('/api/reporting/objectives', requireApiAuth, async (req, res) => {
     try {
       const q = query(collection(db, 'objectives'), orderBy('dueDate', 'asc'));
       const snapshot = await getDocs(q);
@@ -69,7 +86,7 @@ async function startServer() {
   // AUTOMATED NOTIFICATION TRIGGER
   // ==========================================
 
-  app.post('/api/system/check-overdue', async (req, res) => {
+  app.post('/api/system/check-overdue', requireApiAuth, async (req, res) => {
     try {
       const now = new Date();
       // Firestore doesn't allow multiple inequality filters on different fields.
