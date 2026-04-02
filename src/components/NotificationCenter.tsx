@@ -128,10 +128,7 @@ export const NotificationCenter: React.FC = () => {
               <button 
                 onClick={() => {
                   // Trigger manual check for demo
-                  fetch('/api/system/check-overdue', { 
-                    method: 'POST',
-                    headers: { 'Authorization': 'Bearer sp-omp-internal-key' }
-                  });
+                  fetch('/api/system/check-overdue?key=sp-omp-internal-key', { method: 'POST' });
                   setIsOpen(false);
                 }}
                 className="text-[9px] font-black text-[var(--accents-6)] hover:text-white uppercase tracking-widest transition-colors"

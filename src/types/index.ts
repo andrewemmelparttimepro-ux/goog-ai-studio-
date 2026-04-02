@@ -1,31 +1,20 @@
 import { Timestamp } from 'firebase/firestore';
 
-// ===== User & Auth =====
+export type Priority = 'LOW' | 'MEDIUM' | 'HIGH' | 'CRITICAL';
+export type ObjectiveStatus = 'NOT_STARTED' | 'ON_TRACK' | 'AT_RISK' | 'BLOCKED' | 'COMPLETED' | 'CANCELLED';
+export type NotificationType = 'OVERDUE' | 'STATUS_CHANGE' | 'ASSIGNMENT' | 'SYSTEM';
 export type UserRole = 'ADMIN' | 'EXECUTIVE' | 'MANAGER' | 'CONTRIBUTOR';
 
 export interface UserProfile {
   uid: string;
   email: string;
   displayName: string;
+  photoURL?: string;
   role: UserRole;
   groupId?: string;
-  managerId?: string;
-  photoURL?: string;
   createdAt: Timestamp;
-  updatedAt: Timestamp;
+  updatedAt?: Timestamp;
 }
-
-// ===== Groups =====
-export interface Group {
-  id: string;
-  name: string;
-  description?: string;
-  createdAt: Timestamp;
-}
-
-// ===== Objectives =====
-export type Priority = 'CRITICAL' | 'HIGH' | 'MEDIUM' | 'LOW';
-export type ObjectiveStatus = 'NOT_STARTED' | 'IN_PROGRESS' | 'WAITING_ON_INPUT' | 'AT_RISK' | 'BLOCKED' | 'COMPLETED' | 'CANCELLED';
 
 export interface Metric {
   label: string;
@@ -33,8 +22,8 @@ export interface Metric {
   target: number;
   current: number;
   unit: string;
+  externalSource?: 'MANUAL' | 'SAP' | 'KPH_EHS';
   integrationId?: string;
-  externalSource?: 'KPH_EHS' | 'SAP' | 'MANUAL';
 }
 
 export interface Subtask {
@@ -45,66 +34,45 @@ export interface Subtask {
 
 export interface Objective {
   id: string;
-  objectiveNumber?: number;
   title: string;
   description: string;
-  groupId: string;
-  assignedToId: string;
-  initiatedById: string;
-  priority: Priority;
   status: ObjectiveStatus;
-  startDate: Timestamp | string;
-  dueDate: Timestamp | string;
-  completionDate?: Timestamp | string;
+  priority: Priority;
+  assignedToId: string;
+  assignedToName: string;
+  groupId: string;
+  groupName: string;
+  startDate: string | Timestamp;
+  dueDate: string | Timestamp;
+  metrics: Metric[];
+  subtasks: Subtask[];
   percentComplete: number;
-  parentId?: string;
-  baselineMetric?: number;
-  targetMetric?: number;
-  metricUnit?: string;
-  nextCheckInDate?: Timestamp | string;
-  acknowledged: boolean;
-  blockerNote?: string;
-  nextAction?: string;
-  metrics?: Metric[];
-  subtasks?: Subtask[];
   createdAt: Timestamp;
   updatedAt: Timestamp;
+  completionDate?: Timestamp;
+  tags?: string[];
 }
 
-// ===== Objective Updates =====
 export interface ObjectiveUpdate {
   id: string;
-  objectiveId?: string;
-  userId?: string;
-  authorId?: string;
-  authorName: string;
   text: string;
-  note?: string;
-  percentComplete?: number;
-  statusAtTime?: string;
+  authorId: string;
+  authorName: string;
   createdAt: Timestamp;
+  statusAtTime: ObjectiveStatus;
 }
 
-// ===== Status History =====
 export interface StatusHistoryEntry {
   id: string;
-  objectiveId?: string;
-  oldStatus: string;
-  previousStatus?: string;
-  newStatus: string;
-  previousOwner?: string;
-  newOwner?: string;
+  oldStatus: ObjectiveStatus;
+  newStatus: ObjectiveStatus;
   changedBy: string;
   changedByName: string;
-  changedAt?: Timestamp;
   timestamp: Timestamp;
   comment?: string;
 }
 
-// ===== Notifications =====
-export type NotificationType = 'OVERDUE' | 'STATUS_CHANGE' | 'ASSIGNMENT' | 'SYSTEM';
-
-export interface AppNotification {
+export interface Notification {
   id: string;
   userId: string;
   title: string;
@@ -115,27 +83,32 @@ export interface AppNotification {
   link?: string;
 }
 
-// ===== Sources / Knowledge Base =====
-export type SourceType = 'TEXT' | 'FILE';
-
-export interface Source {
+export interface ChatMessage {
   id: string;
-  name: string;
-  type: SourceType;
-  content: string;
-  url?: string;
-  fileType?: string;
-  authorId: string;
+  text: string;
+  senderId: string;
+  senderName: string;
   createdAt: Timestamp;
 }
 
-// ===== Roadmap =====
-export interface TaskNote {
+export interface Source {
+  id: string;
+  title: string;
+  content: string;
+  type: 'TEXT' | 'FILE';
+  url?: string;
+  createdAt: Timestamp;
+  createdBy: string;
+  embedding?: number[];
+}
+
+export interface Note {
   id: string;
   text: string;
-  timestamp: string;
-  authorId?: string;
-  authorName?: string;
+  authorId: string;
+  authorName: string;
+  createdAt: Timestamp;
+  timestamp?: string;
   embedding?: number[];
 }
 
@@ -147,42 +120,6 @@ export interface TaskFile {
   url: string;
 }
 
-export interface RoadmapTask {
-  id: string;
-  title: string;
-  startDate: string;
-  endDate: string;
-  status: 'COMPLETED' | 'IN_PROGRESS' | 'PENDING';
-  priority?: Priority;
-  description?: string;
-  percentComplete?: number;
-  notes?: TaskNote[];
-  files?: TaskFile[];
-}
-
-export interface PersonRoadmap {
-  id: string;
-  name: string;
-  role: string;
-  avatar: string;
-  color: string;
-  isActive: boolean;
-  tasks: RoadmapTask[];
-  notes?: TaskNote[];
-  files?: TaskFile[];
-}
-
-// ===== Chat =====
-export interface ChatMessage {
-  id: string;
-  text: string;
-  senderId: string;
-  senderName: string;
-  sender?: string;
-  timestamp: Timestamp | string;
-}
-
-// ===== AI Service Types =====
 export interface RiskAnalysis {
   riskLevel: 'LOW' | 'MEDIUM' | 'HIGH' | 'CRITICAL';
   summary: string;

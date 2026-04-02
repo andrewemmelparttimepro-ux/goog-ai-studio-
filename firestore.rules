@@ -103,7 +103,7 @@ service cloud.firestore {
     }
 
     function isValidStatus(status) {
-      return status in ['NOT_STARTED', 'IN_PROGRESS', 'WAITING_ON_INPUT', 'AT_RISK', 'BLOCKED', 'COMPLETED', 'CANCELLED'];
+      return status in ['NOT_STARTED', 'ON_TRACK', 'AT_RISK', 'BLOCKED', 'COMPLETED', 'CANCELLED'];
     }
 
     // ===============================================================
@@ -141,26 +141,20 @@ service cloud.firestore {
     }
 
     // ===============================================================
-    // Collection Rules
+    // Rules
     // ===============================================================
 
     // Users Collection
     match /users/{userId} {
-      // All authenticated users can read user profiles (needed for roadmap, assignment)
       allow read: if isAuthenticated();
-      
-      // Create: User can create their own profile as CONTRIBUTOR. Admin can create any.
       allow create: if isAuthenticated() && isValidUser(request.resource.data) && 
                     ((isOwner(userId) && request.resource.data.role == 'CONTRIBUTOR') || isAdmin());
-      
-      // Update: User can update their own profile (but not role). Admin can update any.
       allow update: if isAuthenticated() && isValidUser(request.resource.data) && 
                     ((isOwner(userId) && request.resource.data.role == resource.data.role) || isAdmin());
-
-      // Notes subcollection
+      
       match /notes/{noteId} {
         allow read: if isAuthenticated();
-        allow create: if isAuthenticated();
+        allow create: if isAuthenticated() && request.resource.data.authorId == request.auth.uid;
       }
     }
 
@@ -172,25 +166,14 @@ service cloud.firestore {
 
     // Objectives Collection
     match /objectives/{objectiveId} {
-      // Everyone authenticated can read objectives (for transparency)
       allow read: if isAuthenticated();
-      
-      // Create: Managers and Admins can create objectives.
       allow create: if isAuthenticated() && (isManager() || isAdmin()) && isValidObjective(request.resource.data);
-      
-      // Update: Owner, Manager, or Admin can update.
       allow update: if isAuthenticated() && isValidObjective(request.resource.data) && 
                     (isOwner(resource.data.assignedToId) || isManager() || isAdmin());
       
-      // Sub-collections
       match /updates/{updateId} {
         allow read: if isAuthenticated();
-        allow create: if isAuthenticated();
-      }
-      
-      match /metrics/{metricId} {
-        allow read: if isAuthenticated();
-        allow write: if isAuthenticated() && (isOwner(get(/databases/$(database)/documents/objectives/$(objectiveId)).data.assignedToId) || isManager() || isAdmin());
+        allow create: if isAuthenticated() && request.resource.data.authorId == request.auth.uid;
       }
       
       match /statusHistory/{historyId} {
@@ -198,18 +181,23 @@ service cloud.firestore {
         allow create: if isAuthenticated();
       }
 
-      // Notes subcollection for objectives
       match /notes/{noteId} {
         allow read: if isAuthenticated();
-        allow create: if isAuthenticated();
+        allow create: if isAuthenticated() && request.resource.data.authorId == request.auth.uid;
+      }
+      
+      match /metrics/{metricId} {
+        allow read: if isAuthenticated();
+        allow write: if isAuthenticated() && (isOwner(get(/databases/$(database)/documents/objectives/$(objectiveId)).data.assignedToId) || isManager() || isAdmin());
       }
     }
 
     // Notifications
     match /notifications/{notificationId} {
-      allow read: if isOwner(resource.data.userId);
-      allow update: if isOwner(resource.data.userId) && hasOnlyAllowedFields(['read']);
-      allow create, delete: if isAdmin();
+      allow read: if isAuthenticated() && request.auth.uid == resource.data.userId;
+      allow update: if isAuthenticated() && request.auth.uid == resource.data.userId && hasOnlyAllowedFields(['read']);
+      allow create: if isAuthenticated(); // Allowed for system triggers
+      allow delete: if isAdmin();
     }
 
     // Chats
@@ -218,16 +206,15 @@ service cloud.firestore {
       allow create: if isAuthenticated() && request.resource.data.senderId == request.auth.uid;
     }
 
-    // Sources Collection (Knowledge Base)
+    // Sources Collection
     match /sources/{sourceId} {
       allow read: if isAuthenticated();
       allow create: if isAuthenticated() && isValidSource(request.resource.data);
       allow delete: if isAuthenticated() && (resource.data.authorId == request.auth.uid || isAdmin());
-      allow update: if false; // Sources are immutable; delete and recreate
+      allow update: if false;
     }
 
-    // Default Deny — Firestore denies by default when no rules match,
-    // but we include this as explicit documentation of intent.
+    // Default Deny
     match /{path=**} {
       allow read, write: if false;
     }

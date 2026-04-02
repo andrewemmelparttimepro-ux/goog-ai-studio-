@@ -1,40 +1,43 @@
-import React, { useState, useRef, useEffect, useMemo } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { User, Calendar, Flag, CheckCircle2, Clock, MessageSquare, Send, Zap, FileText, Paperclip, Plus, Search, Brain, X, RefreshCw, ChevronRight } from 'lucide-react';
 import { ObjectiveForm } from './ObjectiveForm';
 import { generateEmbedding } from '../services/embeddingService';
 import { db, auth, storage, handleFirestoreError, OperationType } from '../firebase';
-import { collection, query, orderBy, onSnapshot, addDoc, updateDoc, doc, serverTimestamp, Timestamp } from 'firebase/firestore';
+import { collection, query, orderBy, onSnapshot, addDoc, serverTimestamp, Timestamp, doc, updateDoc } from 'firebase/firestore';
 import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
 import { useAuth } from './FirebaseProvider';
-import type { RoadmapTask, PersonRoadmap, TaskNote, TaskFile } from '../types';
+import { Objective, UserProfile, Note, TaskFile, Priority, ObjectiveStatus } from '../types';
 
-// Dynamic timeline calculation based on actual objective data
-const getTimelineRange = (tasks: RoadmapTask[]) => {
-  const allDates = tasks.flatMap(t => [new Date(t.startDate), new Date(t.endDate)]);
-  if (allDates.length === 0) {
-    // Fallback: current month ± 2 months
-    const now = new Date();
-    const start = new Date(now.getFullYear(), now.getMonth() - 1, 1);
-    const end = new Date(now.getFullYear(), now.getMonth() + 3, 0);
-    return { start, end };
-  }
-  const minDate = new Date(Math.min(...allDates.map(d => d.getTime())));
-  const maxDate = new Date(Math.max(...allDates.map(d => d.getTime())));
-  // Add 2 week buffer on each side
-  const start = new Date(minDate);
-  start.setDate(start.getDate() - 14);
-  start.setDate(1); // Snap to first of month
-  const end = new Date(maxDate);
-  end.setDate(end.getDate() + 14);
-  end.setDate(new Date(end.getFullYear(), end.getMonth() + 1, 0).getDate()); // Snap to end of month
-  return { start, end };
-};
+interface RoadmapTask {
+  id: string;
+  title: string;
+  startDate: string;
+  endDate: string;
+  status: 'COMPLETED' | 'IN_PROGRESS' | 'PENDING';
+  priority?: Priority;
+  description?: string;
+  percentComplete?: number;
+  notes?: Note[];
+  files?: TaskFile[];
+}
 
-const calculatePositionWithRange = (date: string, range: { start: Date; end: Date }) => {
+interface PersonRoadmap {
+  id: string;
+  name: string;
+  role: string;
+  avatar: string;
+  color: string;
+  isActive: boolean;
+  tasks: RoadmapTask[];
+  notes?: Note[];
+  files?: TaskFile[];
+}
+
+const calculatePosition = (date: string, timelineStart: Date, timelineEnd: Date) => {
   const d = new Date(date);
-  const total = range.end.getTime() - range.start.getTime();
-  const current = d.getTime() - range.start.getTime();
+  const total = timelineEnd.getTime() - timelineStart.getTime();
+  const current = d.getTime() - timelineStart.getTime();
   return Math.max(0, Math.min(100, (current / total) * 100));
 };
 
@@ -45,11 +48,13 @@ type CardState =
 const TaskStack: React.FC<{
   tasks: RoadmapTask[];
   person: PersonRoadmap;
-  calcPos: (date: string) => number;
+  calculatePosition: (date: string, start: Date, end: Date) => number;
+  timelineStart: Date;
+  timelineEnd: Date;
   setActiveCard: (card: CardState | null) => void;
   getTaskPriority: (t: RoadmapTask) => number;
   isFirstRow: boolean;
-}> = ({ tasks, person, calcPos, setActiveCard, getTaskPriority, isFirstRow }) => {
+}> = ({ tasks, person, calculatePosition, timelineStart, timelineEnd, setActiveCard, getTaskPriority, isFirstRow }) => {
   const [activeIndex, setActiveIndex] = useState(0);
   const [isHovered, setIsHovered] = useState(false);
   const containerRef = useRef<HTMLDivElement>(null);
@@ -68,9 +73,9 @@ const TaskStack: React.FC<{
 
   const getStatusColor = (t: RoadmapTask, isTop: boolean) => {
     if (t.status === 'COMPLETED') return isTop ? 'bg-emerald-600 border-emerald-400 text-white' : 'bg-emerald-500/20 border-emerald-500/40 text-emerald-400';
-    const now = new Date();
+    const todayDate = new Date();
     const dueDate = new Date(t.endDate);
-    const diffDays = Math.ceil((dueDate.getTime() - now.getTime()) / (1000 * 60 * 60 * 24));
+    const diffDays = Math.ceil((dueDate.getTime() - todayDate.getTime()) / (1000 * 60 * 60 * 24));
     if (diffDays < 0) return isTop ? 'bg-rose-600 border-rose-400 text-white' : 'bg-rose-500/20 border-rose-500/40 text-rose-400';
     if (diffDays <= 3) return isTop ? 'bg-amber-500 border-amber-400 text-black' : 'bg-amber-500/20 border-amber-500/40 text-amber-400';
     return isTop ? 'bg-emerald-600 border-emerald-400 text-white' : 'bg-emerald-500/20 border-emerald-500/40 text-emerald-400';
@@ -80,8 +85,8 @@ const TaskStack: React.FC<{
   const earliestStart = sortedTasks.reduce((min, t) => new Date(t.startDate) < new Date(min) ? t.startDate : min, sortedTasks[0].startDate);
   const latestEnd = sortedTasks.reduce((max, t) => new Date(t.endDate) > new Date(max) ? t.endDate : max, sortedTasks[0].endDate);
   
-  const left = calcPos(earliestStart);
-  const width = calcPos(latestEnd) - left;
+  const left = calculatePosition(earliestStart, timelineStart, timelineEnd);
+  const width = calculatePosition(latestEnd, timelineStart, timelineEnd) - left;
 
   return (
     <div 
@@ -186,6 +191,10 @@ const TaskStack: React.FC<{
 
 export const Roadmap: React.FC = () => {
   const [roadmapData, setRoadmapData] = useState<PersonRoadmap[]>([]);
+  const [timelineMonths, setTimelineMonths] = useState<string[]>([]);
+  const [timelineStart, setTimelineStart] = useState(new Date('2026-03-01'));
+  const [timelineEnd, setTimelineEnd] = useState(new Date('2026-06-30'));
+  
   const [isTimelineMaximized, setIsTimelineMaximized] = useState(true);
   const [activeCard, setActiveCard] = useState<CardState | null>(null);
   const [assigningToId, setAssigningToId] = useState<string | null>(null);
@@ -193,36 +202,20 @@ export const Roadmap: React.FC = () => {
   const [activeTab, setActiveTab] = useState<'NOTES' | 'CHAT'>('NOTES');
   const [isProcessing, setIsProcessing] = useState(false);
   const [isExpanded, setIsExpanded] = useState(false);
-  const { user } = useAuth();
-  const [chatMessages, setChatMessages] = useState<{[key: string]: {id: string, text: string, sender: string, timestamp: string}[]}>({})
+  const { user, profile } = useAuth();
+  const [chatMessages, setChatMessages] = useState<{[key: string]: {id: string, text: string, sender: string, timestamp: string}[]}>({});
   const [newChatMessage, setNewChatMessage] = useState('');
   const [isUploading, setIsUploading] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const today = new Date();
-
-  // Dynamic timeline range calculated from actual objective data
-  const allTasks = useMemo(() => roadmapData.flatMap(p => p.tasks), [roadmapData]);
-  const timelineRange = useMemo(() => getTimelineRange(allTasks), [allTasks]);
-  const calcPos = useMemo(() => (date: string) => calculatePositionWithRange(date, timelineRange), [timelineRange]);
-  const todayPosition = calcPos(today.toISOString().split('T')[0]);
-
-  // Generate month labels dynamically from timeline range
-  const months = useMemo(() => {
-    const labels: string[] = [];
-    const cursor = new Date(timelineRange.start);
-    while (cursor <= timelineRange.end) {
-      labels.push(cursor.toLocaleDateString('en-US', { month: 'short' }));
-      cursor.setMonth(cursor.getMonth() + 1);
-    }
-    return labels;
-  }, [timelineRange]);
+  const todayPosition = calculatePosition(today.toISOString(), timelineStart, timelineEnd);
 
   const getTaskPriority = (t: RoadmapTask) => {
     if (t.status === 'COMPLETED') return 0;
-    const now = new Date();
+    const todayDate = new Date();
     const dueDate = new Date(t.endDate);
-    const diffDays = Math.ceil((dueDate.getTime() - now.getTime()) / (1000 * 60 * 60 * 24));
+    const diffDays = Math.ceil((dueDate.getTime() - todayDate.getTime()) / (1000 * 60 * 60 * 24));
     if (diffDays < 0) return 3; // Red
     if (diffDays <= 3) return 2; // Yellow
     return 1; // Green
@@ -255,7 +248,7 @@ export const Roadmap: React.FC = () => {
   useEffect(() => {
     const q = collection(db, 'users');
     const unsubscribe = onSnapshot(q, (snapshot) => {
-      const usersData: any[] = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+      let usersData: any[] = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
       setUsers(usersData);
     }, (error) => {
       handleFirestoreError(error, OperationType.GET, 'users');
@@ -276,6 +269,37 @@ export const Roadmap: React.FC = () => {
   useEffect(() => {
     if (users.length === 0) return;
 
+    // Calculate dynamic timeline range
+    if (objectives.length > 0) {
+      const dates = objectives.flatMap(o => {
+        const d1 = o.startDate ? (o.startDate instanceof Timestamp ? o.startDate.toDate() : new Date(o.startDate)) : new Date();
+        const d2 = o.dueDate ? (o.dueDate instanceof Timestamp ? o.dueDate.toDate() : new Date(o.dueDate)) : new Date();
+        return [d1, d2];
+      }).filter(d => !isNaN(d.getTime()));
+
+      if (dates.length > 0) {
+        const minDate = new Date(Math.min(...dates.map(d => d.getTime())));
+        const maxDate = new Date(Math.max(...dates.map(d => d.getTime())));
+        
+        // Add padding
+        minDate.setDate(1);
+        maxDate.setMonth(maxDate.getMonth() + 1);
+        maxDate.setDate(0);
+
+        setTimelineStart(minDate);
+        setTimelineEnd(maxDate);
+
+        // Generate months for display
+        const m = [];
+        let curr = new Date(minDate);
+        while (curr <= maxDate) {
+          m.push(curr.toLocaleString('default', { month: 'short' }));
+          curr.setMonth(curr.getMonth() + 1);
+        }
+        setTimelineMonths(m);
+      }
+    }
+
     const mappedData = users.map((u: any, index) => {
       const userObjectives = objectives.filter((o: any) => o.assignedToId === u.id);
       const colors = ['bg-indigo-600', 'bg-indigo-500', 'bg-indigo-400', 'bg-emerald-500', 'bg-indigo-300', 'bg-indigo-400', 'bg-emerald-400'];
@@ -289,7 +313,7 @@ export const Roadmap: React.FC = () => {
         isActive: true,
         tasks: userObjectives.map((o: any) => {
           const start = o.startDate ? (o.startDate instanceof Timestamp ? o.startDate.toDate().toISOString().split('T')[0] : o.startDate) : 
-                       (o.createdAt instanceof Timestamp ? o.createdAt.toDate().toISOString().split('T')[0] : '2026-03-01');
+                       (o.createdAt instanceof Timestamp ? o.createdAt.toDate().toISOString().split('T')[0] : new Date().toISOString().split('T')[0]);
           
           return {
             id: o.id,
@@ -312,17 +336,6 @@ export const Roadmap: React.FC = () => {
   const highPriorityTasks = roadmapData.flatMap(p => 
     p.tasks.filter(t => t.priority === 'HIGH' || t.priority === 'CRITICAL').map(t => ({ ...t, owner: p.name }))
   );
-
-  // Dynamic stats calculated from real data
-  const liveStats = useMemo(() => {
-    const allT = roadmapData.flatMap(p => p.tasks);
-    const total = allT.length;
-    if (total === 0) return { momentum: 0, activeCount: 0, totalCount: 0 };
-    const completedCount = allT.filter(t => t.status === 'COMPLETED').length;
-    const avgProgress = allT.reduce((sum, t) => sum + (t.percentComplete || (t.status === 'COMPLETED' ? 100 : 0)), 0) / total;
-    const activeCount = allT.filter(t => t.status !== 'COMPLETED' && t.status !== 'PENDING').length + completedCount;
-    return { momentum: Math.round(avgProgress), activeCount, totalCount: total };
-  }, [roadmapData]);
 
   useEffect(() => {
     if (!activeCard || activeTab !== 'CHAT' || !user) return;
@@ -349,51 +362,54 @@ export const Roadmap: React.FC = () => {
     return () => unsubscribe();
   }, [activeCard, activeTab, user]);
 
+  // Listen for notes when a card is active
+  useEffect(() => {
+    if (!activeCard) return;
+
+    const targetId = activeCard.type === 'TASK' ? activeCard.task.id : activeCard.person.id;
+    const collectionPath = activeCard.type === 'TASK' ? `objectives/${targetId}/notes` : `users/${targetId}/notes`;
+    
+    const q = query(collection(db, collectionPath), orderBy('createdAt', 'desc'));
+    const unsubscribe = onSnapshot(q, (snapshot) => {
+      const notes = snapshot.docs.map(doc => ({
+        id: doc.id,
+        ...doc.data(),
+        timestamp: doc.data().createdAt?.toDate().toISOString() || new Date().toISOString()
+      } as Note));
+      
+      if (activeCard.type === 'TASK') {
+        setActiveCard(prev => prev?.type === 'TASK' && prev.task.id === targetId ? { ...prev, task: { ...prev.task, notes } } : prev);
+      } else {
+        setActiveCard(prev => prev?.type === 'PERSON' && prev.person.id === targetId ? { ...prev, person: { ...prev.person, notes } } : prev);
+      }
+    });
+
+    return () => unsubscribe();
+  }, [activeCard?.type === 'TASK' ? activeCard.task.id : activeCard?.person.id]);
+
   const handleAddNote = async () => {
-    if (!newNote.trim() || !activeCard || !user) return;
+    if (!newNote.trim() || !activeCard || !profile) return;
     setIsProcessing(true);
     
-    const embedding = await generateEmbedding(newNote);
-    const note: TaskNote = {
-      id: Math.random().toString(36).substr(2, 9),
-      text: newNote,
-      timestamp: new Date().toISOString(),
-      authorId: user.uid,
-      authorName: user.displayName || 'Unknown',
-      embedding: embedding || undefined
-    };
-
-    // Persist note to Firestore
     try {
+      const embedding = await generateEmbedding(newNote);
       const targetId = activeCard.type === 'TASK' ? activeCard.task.id : activeCard.person.id;
-      const targetCollection = activeCard.type === 'TASK' ? 'objectives' : 'users';
-      const notesRef = collection(db, targetCollection, targetId, 'notes');
-      await addDoc(notesRef, {
-        text: newNote,
-        timestamp: serverTimestamp(),
-        authorId: user.uid,
-        authorName: user.displayName || 'Unknown',
-        ...(embedding ? { embedding } : {})
-      });
-    } catch (error) {
-      console.error('Error persisting note:', error);
-    }
+      const collectionPath = activeCard.type === 'TASK' ? `objectives/${targetId}/notes` : `users/${targetId}/notes`;
 
-    if (activeCard.type === 'TASK') {
-      const updatedTask = {
-        ...activeCard.task,
-        notes: [...(activeCard.task.notes || []), note]
-      };
-      setActiveCard({ ...activeCard, task: updatedTask });
-    } else {
-      const updatedPerson = {
-        ...activeCard.person,
-        notes: [...(activeCard.person.notes || []), note]
-      };
-      setActiveCard({ ...activeCard, person: updatedPerson });
+      await addDoc(collection(db, collectionPath), {
+        text: newNote,
+        authorId: profile.uid,
+        authorName: profile.displayName || 'Unknown',
+        createdAt: serverTimestamp(),
+        embedding: embedding || null
+      });
+
+      setNewNote('');
+    } catch (error) {
+      handleFirestoreError(error, OperationType.WRITE, 'notes');
+    } finally {
+      setIsProcessing(false);
     }
-    setNewNote('');
-    setIsProcessing(false);
   };
 
   const handleAddChatMessage = async () => {
@@ -458,6 +474,12 @@ export const Roadmap: React.FC = () => {
     }
   };
   
+  const liveStats = {
+    momentum: objectives.length > 0 ? Math.round(objectives.reduce((acc, o) => acc + (o.percentComplete || 0), 0) / objectives.length) : 0,
+    activeCount: objectives.filter(o => o.status !== 'COMPLETED' && o.status !== 'CANCELLED').length,
+    totalCount: objectives.length
+  };
+
   return (
     <div className={`w-full h-full flex flex-col gap-4 relative overflow-hidden transition-all duration-500 ${isTimelineMaximized ? 'px-4 md:px-8 lg:px-12 py-4 md:py-8' : 'px-6 md:px-16 lg:px-24 py-6 md:py-16'}`}>
       {/* Background Glows */}
@@ -472,7 +494,7 @@ export const Roadmap: React.FC = () => {
         <div>
           <div className="flex items-center gap-3 mb-2">
             <div className="px-2 py-0.5 bg-indigo-500 text-white text-[8px] font-black uppercase tracking-widest rounded-sm shadow-[0_0_15px_rgba(99,102,241,0.5)]">Optimized</div>
-            <div className="text-[10px] font-mono text-[var(--accents-4)] uppercase tracking-[0.3em]">Today: {new Date().toLocaleDateString()}</div>
+            <div className="text-[10px] font-mono text-[var(--accents-4)] uppercase tracking-[0.3em]">Today: {today.toLocaleDateString()}</div>
           </div>
           <h2 className="text-3xl md:text-4xl font-black text-white tracking-tighter uppercase leading-none">The Master Plan</h2>
           <p className="text-[var(--accents-6)] font-bold uppercase tracking-[0.4em] text-[9px] mt-2">Shipping big things, one step at a time</p>
@@ -628,8 +650,8 @@ export const Roadmap: React.FC = () => {
               <div className="min-w-[600px] h-full relative">
                 {/* Timeline Grid Lines */}
               <div className="absolute inset-0 flex justify-between pointer-events-none">
-                {months.map((m, i) => (
-                  <div key={m} className="flex flex-col items-center h-full relative" style={{ width: `${100 / months.length}%` }}>
+                {timelineMonths.map((m, i) => (
+                  <div key={`${m}-${i}`} className="flex flex-col items-center h-full relative" style={{ width: `${100 / timelineMonths.length}%` }}>
                     <div className="w-px h-full bg-white/[0.03]" />
                     <span className="absolute bottom-4 text-[8px] font-black text-[var(--accents-5)] uppercase tracking-[0.3em] pb-2">{m}</span>
                   </div>
@@ -655,7 +677,9 @@ export const Roadmap: React.FC = () => {
                           key={stackIdx}
                           tasks={stack}
                           person={person}
-                          calcPos={calcPos}
+                          calculatePosition={calculatePosition}
+                          timelineStart={timelineStart}
+                          timelineEnd={timelineEnd}
                           setActiveCard={setActiveCard}
                           getTaskPriority={getTaskPriority}
                           isFirstRow={personIdx === 0}

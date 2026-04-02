@@ -43,7 +43,7 @@ export const Login: React.FC = () => {
       }
       
       if (user) {
-        await ensureProfile(user, 'KEVIN MALONE', 'CHIEF FINANCIAL OFFICER');
+        await ensureProfile(user, 'KEVIN MALONE', 'EXECUTIVE');
       }
     } catch (err: any) {
       console.error("Demo login error:", err);

@@ -17,29 +17,31 @@ async function startServer() {
   const PORT = 3000;
 
   app.use(express.json());
-
+  
   // ==========================================
-  // API AUTH MIDDLEWARE
+  // API AUTHENTICATION MIDDLEWARE
   // ==========================================
   
-  const API_KEY = process.env.SP_API_KEY || 'sp-omp-internal-key';
-  
-  const requireApiAuth = (req: express.Request, res: express.Response, next: express.NextFunction) => {
+  const authenticateAPI = (req: express.Request, res: express.Response, next: express.NextFunction) => {
+    const internalKey = process.env.SP_OMP_INTERNAL_KEY || 'sp-omp-internal-key';
     const authHeader = req.headers.authorization;
-    const queryKey = req.query.key as string;
-    const providedKey = authHeader?.replace('Bearer ', '') || queryKey;
-    
-    if (!providedKey || providedKey !== API_KEY) {
-      return res.status(401).json({ error: 'Unauthorized. Provide a valid API key via Authorization header or ?key= parameter.' });
+    const queryKey = req.query.key;
+
+    if (authHeader === `Bearer ${internalKey}` || queryKey === internalKey) {
+      next();
+    } else {
+      res.status(401).json({ 
+        error: 'Unauthorized: Invalid or missing API key',
+        info: 'SandPro OMP Internal API requires a valid key'
+      });
     }
-    next();
   };
 
   // ==========================================
   // POWER BI REPORTING API (The "Jake" Routes)
   // ==========================================
   
-  app.get('/api/reporting/objectives', requireApiAuth, async (req, res) => {
+  app.get('/api/reporting/objectives', authenticateAPI, async (req, res) => {
     try {
       const q = query(collection(db, 'objectives'), orderBy('dueDate', 'asc'));
       const snapshot = await getDocs(q);
@@ -86,7 +88,7 @@ async function startServer() {
   // AUTOMATED NOTIFICATION TRIGGER
   // ==========================================
 
-  app.post('/api/system/check-overdue', requireApiAuth, async (req, res) => {
+  app.post('/api/system/check-overdue', authenticateAPI, async (req, res) => {
     try {
       const now = new Date();
       // Firestore doesn't allow multiple inequality filters on different fields.

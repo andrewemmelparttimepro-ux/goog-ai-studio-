@@ -10,10 +10,10 @@ import { Roadmap } from './Roadmap';
 import { NotificationCenter } from './NotificationCenter';
 import { fetchExternalMetric } from '../services/externalDataService';
 import { Brain, TrendingUp, History, ChevronRight, LayoutDashboard, Zap, Menu, X, RefreshCw, Plus, Search } from 'lucide-react';
-import type { Objective, Source } from '../types';
 
-import { generatePortfolioSummary, generateDailyBriefing, DailyBriefing } from '../services/aiService';
+import { generatePortfolioSummary, generateDailyBriefing } from '../services/aiService';
 import { motion, AnimatePresence } from 'framer-motion';
+import { Objective, Metric, Subtask, Source, DailyBriefing } from '../types';
 
 export const Dashboard: React.FC = () => {
   const { user, profile } = useAuth();
@@ -141,9 +141,16 @@ export const Dashboard: React.FC = () => {
 
   useEffect(() => {
     if (objectives.length > 0 && !dailyBriefing && !isBriefingLoading) {
-      fetchBriefing(objectives);
+      // Only fetch briefing once per session or if objectives change and we don't have one
+      const lastBriefingTime = sessionStorage.getItem('lastBriefingTime');
+      const now = Date.now();
+      
+      if (!lastBriefingTime || now - parseInt(lastBriefingTime) > 3600000) { // 1 hour cache
+        fetchBriefing(objectives);
+        sessionStorage.setItem('lastBriefingTime', now.toString());
+      }
     }
-  }, [objectives.length, dailyBriefing, isBriefingLoading]);
+  }, [objectives.length]);
 
   const fetchBriefing = async (currentObjectives: Objective[]) => {
     setIsBriefingLoading(true);
@@ -227,7 +234,8 @@ export const Dashboard: React.FC = () => {
     overdue: objectives.filter(o => {
       if (!o.dueDate) return false;
       const due = o.dueDate instanceof Timestamp ? o.dueDate.toDate() : new Date(o.dueDate);
-      return !isNaN(due.getTime()) && due < new Date() && o.status !== 'COMPLETED' && o.status !== 'CANCELLED';
+      if (isNaN(due.getTime())) return false;
+      return due < new Date() && o.status !== 'COMPLETED' && o.status !== 'CANCELLED';
     }).length,
     dueSoon: objectives.filter(o => {
       if (!o.dueDate) return false;

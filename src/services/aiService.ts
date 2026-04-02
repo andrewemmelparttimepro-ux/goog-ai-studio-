@@ -1,8 +1,5 @@
 import { GoogleGenAI, Type } from "@google/genai";
-import type { RiskAnalysis, DailyBriefing } from '../types';
-
-// Re-export for consumers
-export type { RiskAnalysis, DailyBriefing };
+import { Objective, UserProfile, Source, RiskAnalysis, DailyBriefing } from "../types";
 
 const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
 
@@ -70,8 +67,6 @@ export const analyzeObjectiveRisk = async (objectiveData: any): Promise<RiskAnal
     };
   }
 };
-
-
 
 const sleep = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
 

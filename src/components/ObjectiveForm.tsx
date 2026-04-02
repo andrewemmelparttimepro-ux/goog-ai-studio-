@@ -59,6 +59,9 @@ export const ObjectiveForm: React.FC<{ onClose: () => void; initialOwnerId?: str
     setLoading(true);
 
     try {
+      const selectedUser = users.find(u => u.uid === formData.assignedToId);
+      const selectedGroup = groups.find(g => g.id === formData.groupId);
+      
       const filteredMetrics = metrics.filter(m => m.label.trim()).map(m => ({ ...m, current: m.baseline }));
       const filteredSubtasks = subtasks
         .filter(s => s.title.trim())
@@ -71,6 +74,8 @@ export const ObjectiveForm: React.FC<{ onClose: () => void; initialOwnerId?: str
       await setDoc(objectiveRef, {
         ...formData,
         id: objectiveId,
+        assignedToName: selectedUser?.displayName || 'Unknown',
+        groupName: selectedGroup?.name || 'Unknown',
         status: 'NOT_STARTED',
         initiatedById: user.uid,
         startDate: new Date(formData.startDate),

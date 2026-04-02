@@ -72,8 +72,8 @@ export const FirebaseProvider: React.FC<{ children: React.ReactNode }> = ({ chil
         if (snapshot.exists()) {
           const data = snapshot.data();
           // Auto-upgrade admin email if needed
-          const ADMIN_EMAIL = import.meta.env.VITE_ADMIN_EMAIL || 'andrewemmelparttimepro@gmail.com';
-          if (user.email === ADMIN_EMAIL && data.role !== 'ADMIN') {
+          const adminEmail = import.meta.env.VITE_ADMIN_EMAIL || 'andrewemmelparttimepro@gmail.com';
+          if (user.email === adminEmail && data.role !== 'ADMIN') {
             await updateDoc(doc(db, 'users', user.uid), { role: 'ADMIN' });
           }
           
